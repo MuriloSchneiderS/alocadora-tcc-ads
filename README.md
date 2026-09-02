@@ -7,3 +7,4 @@ Protótipo de estrutura:
     Autenticação: Firebase Auth; (Google, Email/Senha...);
     Banco de Dados: Firestore (Banco de Dados, url do storage), Cloud Storage(Armazenamento de arquivos);
     Pagamentos: Stripe; (Pagamentos, assinaturas, checkout...)
+    Deploy: Vercel (Frontend, Backend, Cloud Functions);
