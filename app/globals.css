@@ -55,7 +55,7 @@ input {
   display: flex;
   gap: 44px;
   margin: 0 auto;
-  max-width: 1280px;
+  max-width: 1800px;
   min-height: 78px;
   padding: 14px 32px;
 }
@@ -147,17 +147,128 @@ input {
 
 .home-shell {
   margin: 0 auto;
-  max-width: 1280px;
-  padding: 52px 32px 80px;
+  max-width: 1800px;
+  padding: 0 32px 80px;
 }
 
 .intro-row {
-  align-items: end;
-  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 70% 30%;
+  margin-bottom: 18px;
+  margin-left: calc(50% - 50vw);
+  width: 100vw;
+}
+
+.intro-image {
+  display: block;
+  height: clamp(300px, 32vw, 460px);
+  object-fit: cover;
+  width: 100%;
+}
+
+.intro-details {
+  background: #222b34;
+  border: 1px solid #667078;
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
-  margin-bottom: 30px;
-  padding-bottom: 22px;
+  min-width: 0;
+  padding: 18px 20px 16px;
+}
+
+.intro-copy h1 {
+  font-size: clamp(25px, 2.4vw, 36px);
+}
+
+.intro-copy p {
+  color: #d5d9d9;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 15px 0 0;
+  max-width: 560px;
+}
+
+.intro-footer {
+  align-items: end;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-top: 30px;
+}
+
+.purchase-options {
+  display: flex;
+  gap: 9px;
+}
+
+.purchase-option {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.price-label {
+  color: #e4e6e4;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.price-button {
+  background: #1a222a;
+  border: 1px solid #667078;
+  color: #f8e3c4;
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 82px;
+  padding: 7px 12px;
+}
+
+.price-button:hover {
+  background: var(--accent);
+  color: var(--secondary);
+}
+
+.owner-info {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  align-items: center;
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.owner-copy {
+  min-width: 0;
+}
+
+.owner-name,
+.owner-title {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.owner-name {
+  color: #fffdf9;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.owner-title {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.owner-avatar {
+  border-radius: 50%;
+  height: 48px;
+  object-fit: cover;
+  width: 48px;
+}
+
+.content-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
 }
 
 .eyebrow {
@@ -195,11 +306,10 @@ h1 {
 .video-grid {
   display: grid;
   gap: 38px 24px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .thumbnail-link {
-  background: #d2d9d6;
   display: block;
   overflow: hidden;
   position: relative;
@@ -230,9 +340,15 @@ h1 {
 }
 
 .video-details {
-  display: flex;
   gap: 12px;
-  padding-top: 14px;
+  padding: 2px
+}
+.video-details h2 {
+  color: var(--primary);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 5px 0;
 }
 
 .avatar {
@@ -245,7 +361,9 @@ h1 {
 }
 
 .video-copy {
-  min-width: 0;
+  display: flex;
+  flex: 1;
+  gap: 12px;
 }
 
 .video-copy h2 {
@@ -324,9 +442,25 @@ h1 {
   }
 
   .intro-row {
+    display: block;
+  }
+
+  .intro-image {
+    height: 240px;
+  }
+
+  .intro-details {
+    min-height: 300px;
+    padding: 16px;
+  }
+
+  .intro-footer {
     align-items: start;
     flex-direction: column;
-    gap: 18px;
+  }
+
+  .owner-info {
+    align-self: flex-end;
   }
 
   .video-grid {
