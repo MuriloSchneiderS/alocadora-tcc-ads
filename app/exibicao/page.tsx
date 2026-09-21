@@ -1,6 +1,16 @@
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+type PublicationMedia = {
+  url: string;
+  mimeType: string;
+  title: string;
+  description: string;
+  fileName: string;
+};
+
 const related = [
   ["Marathon - Official Cinematic Short Story Trailer", "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=600&q=80", "8:44"],
   ["Watch Dogs: Legion - Tipping Point Cinematic Trailer", "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80", "1:35"],
@@ -8,20 +18,61 @@ const related = [
   ["Love, Death + Robots | Netflix", "https://images.unsplash.com/photo-1535223289827-42f1e9919769?auto=format&fit=crop&w=600&q=80", "2:14"],
 ];
 
-export default function Exibicao() {
+const fallbackMedia: PublicationMedia = {
+  url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+  mimeType: "video/mp4",
+  title: "The Windshield Wiper",
+  description: "Arquivo de demonstração. Quando o Firestore estiver conectado, estes dados virão do documento da publicação.",
+  fileName: "the-windshield-wiper.mp4",
+};
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function mediaKind(media: PublicationMedia) {
+  const mimeType = media.mimeType.toLowerCase();
+  const extension = media.fileName.toLowerCase().split(".").pop();
+
+  if (mimeType.startsWith("video/") || extension === "webm" || extension === "mp4") return "video";
+  if (mimeType.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a"].includes(extension ?? "")) return "audio";
+  if (mimeType.startsWith("image/") || ["jpg", "jpeg", "png", "gif", "webp", "avif"].includes(extension ?? "")) return "image";
+  if (mimeType === "application/pdf" || extension === "pdf") return "pdf";
+  if (mimeType === "application/epub+zip" || extension === "epub") return "epub";
+  return "unknown";
+}
+
+function MediaViewer({ media }: { media: PublicationMedia }) {
+  const kind = mediaKind(media);
+  const fallback = <a href={media.url} target="_blank" rel="noreferrer" className="mt-3 inline-block border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a>;
+
+  if (kind === "video") return <video className="h-full w-full bg-black object-contain" controls playsInline preload="metadata" src={media.url}>{fallback}</video>;
+  if (kind === "audio") return <div className="flex h-full min-h-48 items-center justify-center bg-panel p-6"><audio className="w-full" controls preload="metadata" src={media.url}>{fallback}</audio></div>;
+  if (kind === "image") return <img src={media.url} alt={media.title} className="h-full w-full object-contain" />;
+  if (kind === "pdf" || kind === "epub") return <iframe title={media.title} src={media.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
+  return <div className="flex h-full min-h-48 flex-col items-center justify-center bg-panel p-6 text-center"><p>Este formato não possui visualização direta no navegador.</p>{fallback}</div>;
+}
+
+export default async function Exibicao({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const media: PublicationMedia = {
+    ...fallbackMedia,
+    url: firstParam(params.url) || fallbackMedia.url,
+    mimeType: firstParam(params.mimeType) || fallbackMedia.mimeType,
+    title: firstParam(params.title) || fallbackMedia.title,
+    description: firstParam(params.description) || fallbackMedia.description,
+    fileName: firstParam(params.fileName) || fallbackMedia.fileName,
+  };
+
   return (
     <div className="min-h-screen bg-ink text-cream">
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div className="relative aspect-video overflow-hidden bg-black">
-            <img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80" alt="Cena do vídeo The Windshield Wiper" className="h-full w-full object-cover" />
-            <div className="absolute inset-x-4 bottom-4 flex items-center gap-3 border-t border-cream pt-2 text-cream"><span>12:18 / 15:01</span><span className="text-3xl text-gold">▷</span><span className="ml-auto text-xl">♬ ⛶</span></div>
-          </div>
+          <div className="aspect-video overflow-hidden bg-black lg:min-h-[60vh] lg:aspect-auto"><MediaViewer media={media} /></div>
           <aside className="bg-panel p-3">
-            <img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80" alt="Miniatura de The Windshield Wiper" className="aspect-video w-full object-cover" />
-            <h1 className="mt-2 text-xl font-semibold text-white">OSCAR WINNER 2022 Best Animated Short &quot;THE WINDSHIELD WIPER&quot; 4K</h1>
-            <p className="mt-2 text-sm leading-tight text-cream/80">The Windshield Wiper. Short animated film by Alberto Mielgo. Designed and Directed by Alberto Mielgo and Leo Sanchez.</p>
+            <h1 className="mt-2 text-xl font-semibold text-white">{media.title}</h1>
+            <p className="mt-2 text-sm leading-tight text-cream/80">{media.description}</p>
             <div className="mt-6 flex items-center justify-between"><button type="button" className="bg-panel-muted px-5 py-2 text-xl hover:bg-gold hover:text-navy">Seguir</button><div className="text-right"><p className="text-lg">Alberto Mielgo</p><p className="text-xs text-cream/70">diretor, pintor e animador</p></div></div>
           </aside>
         </section>
