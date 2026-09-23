@@ -7,12 +7,12 @@ export default function Publicacao() {
       <Header showSearch={false} showPublish={false} />
       <main className="mx-auto max-w-3xl bg-panel p-2 sm:p-3">
         <div className="grid gap-4 md:grid-cols-2">
-          <UploadZone className="h-72" formats="Formatos aceitos: mp4, webm, jpg, png, webp, mp3 e pdf." />
+          <UploadZone className="h-72" formats="Formatos aceitos: mp4, webm, jpg, png, webp, mp3, pdf e epub." accept={{ "video/mp4": [".mp4"], "video/webm": [".webm"], "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"], "audio/mpeg": [".mp3"], "application/pdf": [".pdf"], "application/epub+zip": [".epub"] }} />
           <section className="space-y-1">
             <input className="w-full bg-panel-muted px-2 py-1 text-sm placeholder:text-cream" placeholder="Título..." />
             <textarea className="h-16 w-full resize-none bg-panel-muted px-2 py-1 text-xs placeholder:text-cream" placeholder="Descrição..." />
             <p className="text-sm">Miniatura:</p>
-            <UploadZone className="h-44" />
+            <UploadZone className="h-44" formats="Formatos aceitos: jpg, png, webp." accept={{ "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"] }} />
           </section>
         </div>
         <div className="grid gap-3 pt-2 md:grid-cols-2">

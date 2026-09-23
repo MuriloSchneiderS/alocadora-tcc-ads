@@ -1,5 +1,6 @@
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
+import VideoPlayer from "../components/VideoPlayer";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -46,7 +47,7 @@ function MediaViewer({ media }: { media: PublicationMedia }) {
   const kind = mediaKind(media);
   const fallback = <a href={media.url} target="_blank" rel="noreferrer" className="mt-3 inline-block border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a>;
 
-  if (kind === "video") return <video className="h-full w-full bg-black object-contain" controls playsInline preload="metadata" src={media.url}>{fallback}</video>;
+  if (kind === "video") return <VideoPlayer src={media.url} type={media.mimeType} title={media.title} fallback={fallback} />;
   if (kind === "audio") return <div className="flex h-full min-h-48 items-center justify-center bg-panel p-6"><audio className="w-full" controls preload="metadata" src={media.url}>{fallback}</audio></div>;
   if (kind === "image") return <img src={media.url} alt={media.title} className="h-full w-full object-contain" />;
   if (kind === "pdf" || kind === "epub") return <iframe title={media.title} src={media.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
