@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Alocadora TCC ADS",
+  title: "Alocadora",
   description: "Plataforma para publicação, aluguel e compra de mídias digitais.",
 };
 

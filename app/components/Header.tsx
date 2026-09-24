@@ -27,7 +27,7 @@ export default function Header({ title, showSearch = true, showPublish = true }:
         {title && <h1 className="flex-1 text-center text-lg font-bold uppercase tracking-tight">{title}</h1>}
 
         {showSearch && (
-          <form className="hidden max-w-2xl flex-1 sm:flex" role="search">
+          <form className="hidden max-w-2xl h-8 flex-1 sm:flex" role="search">
             <label className="sr-only" htmlFor="site-search">Buscar vídeos</label>
             <input id="site-search" type="search" placeholder="PESQUISAR" className="min-w-0 flex-1 border border-navy bg-panel px-3 py-2 text-xs text-white placeholder:text-cream/70" />
             <button type="submit" className="w-12 bg-navy text-lg text-cream hover:bg-panel" aria-label="Buscar">⌕</button>
