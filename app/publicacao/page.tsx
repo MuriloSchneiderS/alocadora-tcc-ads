@@ -16,9 +16,18 @@ export default function Publicacao() {
           </section>
         </div>
         <div className="grid gap-3 pt-2 md:grid-cols-2">
-          <label className="text-center text-sm">Playlist:<select className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs"><option>Selecionar</option></select></label>
+          <label className="text-center text-sm">Playlist:
+            <select className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs">
+              <option>Selecionar</option>
+            </select>
+          </label>
           <label className="text-center text-sm">Preço<input className="mt-1 block w-full bg-panel-muted px-2 py-1 text-xs" placeholder="R$0" /></label>
-          <label className="text-center text-sm">Modelo de monetização:<select className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs"><option>Gratuito com anúncios</option><option>Aluguel</option><option>Compra avulsa</option></select></label>
+          <label className="text-center text-sm">Modelo de monetização:
+            <select className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs"><option>Gratuito com anúncios</option>
+              <option>Aluguel</option>
+              <option>Compra avulsa</option>
+            </select>
+          </label>
           <input className="self-end bg-panel-muted px-2 py-1 text-xs" placeholder="R$2/semana" />
           <button type="button" className="bg-panel-muted py-2 text-xs hover:bg-gold hover:text-navy md:col-span-2">Adicionar monetização</button>
         </div>

@@ -1,4 +1,10 @@
+"use client";
+
+import { onAuthStateChanged } from "firebase/auth";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import { auth } from "../../lib/firebase";
 
 type HeaderProps = {
   title?: string;
@@ -7,11 +13,15 @@ type HeaderProps = {
 };
 
 export default function Header({ title, showSearch = true, showPublish = true }: HeaderProps) {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => onAuthStateChanged(auth, (user) => setIsLoggedIn(Boolean(user))), []);
+
   return (
     <header className="sticky top-0 z-20 border-b border-navy/20 bg-cream text-ink">
       <div className="mx-auto flex min-h-12 max-w-[1800px] items-center gap-4 px-3 py-2 sm:px-5">
         <Link className="block w-36 shrink-0" href="/" aria-label="Alocadora, página inicial">
-          <img src="/assets/logo.png" alt="Alocadora" className="block h-auto w-full" />
+          <img src="/assets/logo-dark.png" alt="Alocadora" className="block h-auto w-full" />
         </Link>
 
         {title && <h1 className="flex-1 text-center text-lg font-bold uppercase tracking-tight">{title}</h1>}
@@ -26,7 +36,7 @@ export default function Header({ title, showSearch = true, showPublish = true }:
 
         <nav className="ml-auto flex items-center gap-3" aria-label="Ações da conta">
           {showPublish && <Link className="hidden min-w-40 bg-navy px-5 py-2 text-center text-xs font-bold text-cream hover:bg-orange hover:text-navy sm:block" href="/publicacao">PUBLICAR</Link>}
-          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" href="/painel_controle" aria-label="Abrir perfil">♙</Link>
+          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" href={isLoggedIn ? "/painel_controle" : "/login"} aria-label={isLoggedIn ? "Abrir painel do perfil" : "Entrar ou criar conta"}>♙</Link>
         </nav>
       </div>
     </header>
