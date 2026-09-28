@@ -2,6 +2,51 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /publicacao/{publicationId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'criador', 'titulo', 'descricao', 'data_criacao', 'tipo', 'tamanho',
+          'duracao', 'miniatura', 'arquivo', 'catalogos'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'criador', 'titulo', 'descricao', 'data_criacao', 'tipo', 'tamanho',
+          'duracao', 'miniatura', 'arquivo', 'catalogos'
+        ])
+        && request.resource.data.criador == request.auth.uid
+        && request.resource.data.titulo is string
+        && request.resource.data.descricao is string
+        && request.resource.data.tipo in ['imagem', 'video', 'audio', 'livro']
+        && request.resource.data.tamanho is int
+        && request.resource.data.tamanho >= 0
+        && request.resource.data.duracao is number
+        && request.resource.data.catalogos is list;
+      allow update: if signedIn()
+        && resource.data.criador == request.auth.uid
+        && request.resource.data.criador == resource.data.criador
+        && request.resource.data.data_criacao == resource.data.data_criacao
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'titulo', 'descricao', 'tamanho', 'duracao', 'miniatura', 'arquivo', 'catalogos'
+        ]);
+      allow delete: if false;
+
+      match /monetizacao/{monetizationId} {
+        allow read: if true;
+        allow create: if signedIn()
+          && get(/databases/$(database)/documents/publicacao/$(publicationId)).data.criador == request.auth.uid
+          && request.resource.data.keys().hasOnly(['tipo', 'preco', 'moeda'])
+          && request.resource.data.tipo in ['gratuito', 'aluguel', 'compra']
+          && request.resource.data.preco is int
+          && request.resource.data.preco >= 0
+          && request.resource.data.moeda == 'BRL';
+        allow update, delete: if false;
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

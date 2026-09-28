@@ -60,3 +60,14 @@ Firestore:
         - comprado_em (timestamp)
         - expira_em (timestamp, caso seja aluguel ou assinatura)
         - hash (stripe checkout session id)
+
+As Functions usam Node.js 22 e declaram `@google-cloud/firestore` diretamente para que o pacote esteja presente no ambiente implantado. Se a criação dos gatilhos do Storage retornar `storage.buckets.get denied`, habilite a Compute Engine API e conceda leitura de metadados do bucket ao service agent do Eventarc antes de repetir o deploy:
+
+```powershell
+$PROJECT_NUMBER = gcloud projects describe alocadora-60233 --format="value(projectNumber)"
+gcloud services enable compute.googleapis.com eventarc.googleapis.com --project alocadora-60233
+gcloud storage buckets add-iam-policy-binding gs://alocadora-60233.firebasestorage.app --member="serviceAccount:service-$PROJECT_NUMBER@gcp-sa-eventarc.iam.gserviceaccount.com" --role="roles/storage.legacyBucketReader"
+firebase deploy --only functions --project alocadora-60233
+```
+
+O comando IAM requer `gcloud` e uma conta com permissão para editar a política IAM do bucket. Aguarde alguns minutos após habilitar APIs ou criar a identidade de serviço do Eventarc antes de tentar novamente.
