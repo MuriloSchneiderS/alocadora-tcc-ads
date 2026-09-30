@@ -5,28 +5,15 @@ rules_version = '2';
 //    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    function reservationFor() {
-      let reservationId = request.resource.metadata.reservationId;
-      let reservation = firestore.get(/databases/(default)/documents/storageReservations/$(reservationId)).data;
-      return request.auth != null
-        && reservation.uid == request.auth.uid
-        && reservation.path == request.resource.name
-        && reservation.size == request.resource.size
-        && reservation.status == "reserved"
-        && reservation.expiresAt > request.time;
-    }
-
     match /publicacoes/arquivos/{publicacaoId}/{fileName} {
       allow read: if request.auth != null;
-      allow create: if resource == null
-        && reservationFor()
-        && firestore.get(/databases/(default)/documents/storageReservations/$(request.resource.metadata.reservationId)).data.publicationId == publicacaoId;
+      allow create: if request.auth != null && resource == null && request.resource.size > 0;
       allow update, delete: if false;
     }
 
     match /publicacoes/miniaturas/{fileName} {
       allow read: if request.auth != null;
-      allow create: if resource == null && reservationFor();
+      allow create: if request.auth != null && resource == null && request.resource.size > 0;
       allow update, delete: if false;
     }
 

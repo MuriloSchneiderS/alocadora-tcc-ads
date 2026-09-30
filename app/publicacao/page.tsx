@@ -2,13 +2,12 @@
 
 import { onAuthStateChanged } from "firebase/auth";
 import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import UploadZone from "../components/UploadZone";
-import { auth, db, functions, storage } from "../../lib/firebase";
+import { auth, db, storage } from "../../lib/firebase";
 import { transcodePublicationFile } from "../../lib/transcode";
 
 //Firestore
@@ -72,8 +71,6 @@ const formatosArquivo = {
   "application/epub+zip": [".epub"],
 };
 
-type ReservationResponse = { reservationId: string; path: string };
-
 function getPublicationType(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp"].includes(extension ?? "")) return "imagem";
@@ -84,34 +81,22 @@ function getPublicationType(file: File) {
 
 async function uploadPublicationFile(publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (message: string) => void) {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const reserve = httpsCallable<
-    { publicationId: string; kind: "archive" | "thumbnail"; extension: string; size: number },
-    ReservationResponse
-  >(functions, "reservePublicationUpload");
-  const cancel = httpsCallable<{ reservationId: string }, { released: boolean }>(functions, "cancelPublicationUpload");
-  const { data } = await reserve({ publicationId, kind, extension, size: file.size });
-
+  const path = kind === "archive"
+    ? `publicacoes/arquivos/${publicationId}/arquivo.${extension}`
+    : `publicacoes/miniaturas/${publicationId}.${extension}`;
+  const fileRef = ref(storage, path);
   try {
-    const fileRef = ref(storage, data.path);
     const url = await new Promise<string>((resolve, reject) => {
-      const task = uploadBytesResumable(fileRef, file, {
-        contentType: file.type,
-        customMetadata: { reservationId: data.reservationId },
-      });
+      const task = uploadBytesResumable(fileRef, file, { contentType: file.type });
       task.on("state_changed", (snapshot) => {
         const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
         onProgress(`Enviando ${kind === "archive" ? "arquivo" : "miniatura"}: ${progress}%`);
-      }, reject, async () => {
-        try {
-          resolve(await getDownloadURL(task.snapshot.ref));
-        } catch (error) {
-          reject(error);
-        }
-      });
+      }, reject, () => getDownloadURL(task.snapshot.ref).then(resolve, reject));
     });
-    return { url, path: data.path };
+
+    return { url, reference: fileRef };
   } catch (error) {
-    await cancel({ reservationId: data.reservationId }).catch(() => undefined);
+    await deleteObject(fileRef).catch(() => undefined);
     throw error;
   }
 }
@@ -167,6 +152,9 @@ export default function Publicacao() {
 
     setPublicando(true);
     setMensagem("Convertendo arquivo neste dispositivo...");
+    let uploadedFile: Awaited<ReturnType<typeof uploadPublicationFile>> | null = null;
+    let uploadedThumbnail: Awaited<ReturnType<typeof uploadPublicationFile>> | null = null;
+    let publicationSaved = false;
 
     try {
       const usuario = auth.currentUser;
@@ -179,8 +167,8 @@ export default function Publicacao() {
       const tipo = getPublicationType(resultado.file);
       const publicationRef = doc(collection(db, "publicacao"));
 
-      const uploadedFile = await uploadPublicationFile(publicationRef.id, resultado.file, "archive", setMensagem);
-      const uploadedThumbnail = miniaturaConvertida
+      uploadedFile = await uploadPublicationFile(publicationRef.id, resultado.file, "archive", setMensagem);
+      uploadedThumbnail = miniaturaConvertida
         ? await uploadPublicationFile(publicationRef.id, miniaturaConvertida, "thumbnail", setMensagem)
         : null;
 
@@ -196,6 +184,7 @@ export default function Publicacao() {
         miniatura: uploadedThumbnail?.url ?? "",
         catalogos: catalogos.filter(Boolean),
       });
+      publicationSaved = true;
 
       await Promise.all(monetizacoes.map(({ modelo, preco }) => addDoc(
         collection(db, "publicacao", publicationRef.id, "monetizacao"),
@@ -209,12 +198,13 @@ export default function Publicacao() {
       setMensagem("Publicação enviada com sucesso.");
       router.push("/painel_controle");
     } catch (error) {
-      const errorCode = typeof error === "object" && error !== null && "code" in error
-        ? String(error.code)
-        : "";
-      setMensagem(errorCode === "functions/not-found"
-        ? "A função de upload ainda não foi implantada no Firebase. Implante as Cloud Functions e tente novamente."
-        : error instanceof Error ? error.message : "Não foi possível publicar o arquivo.");
+      if (!publicationSaved) {
+        await Promise.all([
+          uploadedFile && deleteObject(uploadedFile.reference).catch(() => undefined),
+          uploadedThumbnail && deleteObject(uploadedThumbnail.reference).catch(() => undefined),
+        ]);
+      }
+      setMensagem(error instanceof Error ? error.message : "Não foi possível publicar o arquivo.");
     } finally {
       setPublicando(false);
     }
