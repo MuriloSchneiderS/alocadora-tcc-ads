@@ -3,11 +3,11 @@ Plataforma de publicação de conteúdo (vídeos, arte, livros, arquivos diverso
 
 Protótipo de estrutura:
     Frontend: Next.js (React, TailwindCSS, TypeScript, Vite, React Query, Zustand);
-    Backend: Next.js API Routes &| Firebase Cloud Functions (Webhooks, triggers);
+    Backend: Next.js API Routes;
     Autenticação: Firebase Auth; (Google, Email/Senha...);
     Banco de Dados: Firestore (Banco de Dados, url do storage), Cloud Storage(Armazenamento de arquivos);
     Pagamentos: Stripe; (Pagamentos, assinaturas, checkout...)
-    Deploy: Vercel (Frontend, Backend, Cloud Functions);
+    Deploy: Vercel (Frontend e Backend);
 
 Firestore:
     usuario/{usuarioId}
@@ -60,3 +60,6 @@ Firestore:
         - comprado_em (timestamp)
         - expira_em (timestamp, caso seja aluguel ou assinatura)
         - hash (stripe checkout session id)
+
+    O fluxo de publicação envia os arquivos diretamente do navegador ao Firebase Storage e grava suas URLs no Firestore.
+

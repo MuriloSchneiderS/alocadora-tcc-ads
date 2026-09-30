@@ -8,15 +8,18 @@ type UploadZoneProps = {
   formats?: string;
   className?: string;
   accept?: Accept;
+  disabled?: boolean;//Desabilita quando estiver enviando o arquivo
   onFileAccepted?: (file: File) => void;
 };
 
-export default function UploadZone({ label = "Fazer upload de arquivo", formats = "Formatos aceitos: jpg, png, webp.", className = "", accept, onFileAccepted }: UploadZoneProps) {
+//Componente para upload de arquivos, com suporte a drag and drop e validação de formatos aceitos.
+export default function UploadZone({ label = "Fazer upload de arquivo", formats = "Formatos aceitos: jpg, png, webp.", className = "", accept, disabled = false, onFileAccepted }: UploadZoneProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [rejectionMessage, setRejectionMessage] = useState("");
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept,
     multiple: false,
+    disabled,
     onDrop: (acceptedFiles, fileRejections) => {
       const file = acceptedFiles[0];
       setRejectionMessage(fileRejections.length > 0 ? "Este arquivo não é compatível com o formato aceito." : "");
@@ -28,7 +31,7 @@ export default function UploadZone({ label = "Fazer upload de arquivo", formats 
   });
 
   return (
-    <div {...getRootProps({ className: `flex cursor-pointer flex-col items-center justify-center border border-black/40 bg-panel-muted px-5 text-center text-sm text-white hover:bg-[#77756e] ${isDragActive ? "border-gold bg-[#77756e]" : ""} ${className}` })}>
+    <div {...getRootProps({ className: `flex ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-[#77756e]"} flex-col items-center justify-center border border-black/40 bg-panel-muted px-5 text-center text-sm text-white ${isDragActive ? "border-gold bg-[#77756e]" : ""} ${className}` })}>
       <input {...getInputProps()} />
       <span className="mb-2 text-4xl font-light text-navy" aria-hidden="true">⇧</span>
       <span>{selectedFile ? selectedFile.name : isDragActive ? "Solte o arquivo aqui" : label}</span>
