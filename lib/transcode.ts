@@ -13,8 +13,10 @@ async function loadFFmpeg() {
   if (!ffmpegLoader) {
     ffmpegLoader = (async () => {
       const ffmpeg = new FFmpeg();
-      const coreUrl = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+      const coreUrl = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
       await ffmpeg.load({
+        //Worker processa os arquivos em background, evitando travamentos na interface do usuário
+        classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
         coreURL: await toBlobURL(`${coreUrl}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${coreUrl}/ffmpeg-core.wasm`, "application/wasm"),
       });
@@ -30,6 +32,7 @@ async function loadFFmpeg() {
   }
 }
 
+//Lê a duração de um arquivo de mídia (áudio ou vídeo) em segundos
 function readDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     const media = file.type.startsWith("audio/") ? document.createElement("audio") : document.createElement("video");
@@ -48,6 +51,7 @@ function readDuration(file: File): Promise<number> {
   });
 }
 
+//Converte o canvas, que contem a miniatura, para um arquivo WebP
 function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -57,6 +61,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
+//Redimensiona e converte imagens para WebP, mantendo a proporção e limitando a largura ou altura máxima para 1280px
 async function transcodeImage(file: File): Promise<File> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
@@ -77,7 +82,7 @@ async function transcodeImage(file: File): Promise<File> {
   return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp" });
 }
 
-async function transcodeWithFFmpeg(file: File, onProgress: (progress: number) => void): Promise<File> {
+async function transcodeWithFFmpeg(file: File, onProgress: (progress: number) => void, duration: number): Promise<File> {
   const ffmpeg = await loadFFmpeg();
   const inputName = `input${file.name.match(/\.[^.]+$/)?.[0] ?? ".bin"}`;
   const extension = file.name.split(".").pop()?.toLowerCase();
@@ -91,31 +96,28 @@ async function transcodeWithFFmpeg(file: File, onProgress: (progress: number) =>
     lastProgress = Math.max(lastProgress, Math.min(1, Math.max(0, progress)));
     onProgress(lastProgress);
   };
+  const logListener = ({ message }: { message: string }) => {
+    const timestamp = message.match(/time=(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
+    if (!timestamp || duration <= 0) return;
+    const elapsed = Number(timestamp[1]) * 3600 + Number(timestamp[2]) * 60 + Number(timestamp[3]);
+    lastProgress = Math.max(lastProgress, Math.min(0.98, elapsed / duration));
+    onProgress(lastProgress);
+  };
   ffmpeg.on("progress", progressListener);
+  ffmpeg.on("log", logListener);
   onProgress(0.02);
 
   try {
     if (isVideo) {
-      const commonArgs = [
-        "-i", inputName,
+      const code = await ffmpeg.exec([
+        "-y", "-i", inputName,
         "-vf", "scale=w='min(854,iw)':h='min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+        "-c:v", "libx264", "-crf", "32", "-preset", "ultrafast",
         "-c:a", "aac", "-b:a", "40k", "-ac", "1", "-ar", "22050",
         "-movflags", "+faststart", "-threads", "1",
         outputName,
-      ];
-      const hevcCode = await ffmpeg.exec([
-        "-y", ...commonArgs.slice(0, 6), "-c:v", "libx265", "-crf", "34", "-preset", "slow",
-        ...commonArgs.slice(6),
       ]);
-
-      if (hevcCode !== 0) {
-        await ffmpeg.deleteFile(outputName).catch(() => undefined);
-        const h264Code = await ffmpeg.exec([
-          "-y", ...commonArgs.slice(0, 6), "-c:v", "libx264", "-crf", "32", "-preset", "veryslow",
-          ...commonArgs.slice(6),
-        ]);
-        if (h264Code !== 0) throw new Error("O FFmpeg nao conseguiu converter este video.");
-      }
+      if (code !== 0) throw new Error("O FFmpeg nao conseguiu converter este video.");
     } else if (isGif) {
       const code = await ffmpeg.exec([
         "-y", "-i", inputName,
@@ -142,11 +144,13 @@ async function transcodeWithFFmpeg(file: File, onProgress: (progress: number) =>
     return isGif && result.size >= file.size ? file : result;
   } finally {
     ffmpeg.off("progress", progressListener);
+    ffmpeg.off("log", logListener);
     await ffmpeg.deleteFile(inputName).catch(() => undefined);
     await ffmpeg.deleteFile(outputName).catch(() => undefined);
   }
 }
 
+//Gera uma miniatura automática para arquivos de vídeo, PDF ou EPUB
 async function createVideoThumbnail(file: File): Promise<File> {
   const video = document.createElement("video");
   const objectUrl = URL.createObjectURL(file);
@@ -185,6 +189,7 @@ async function createVideoThumbnail(file: File): Promise<File> {
   }
 }
 
+//Gera uma miniatura automática para arquivos PDF usando a primeira página do documento
 async function createPdfThumbnail(file: File): Promise<File> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
@@ -208,6 +213,7 @@ async function createPdfThumbnail(file: File): Promise<File> {
   }
 }
 
+//Quebra o texto em linhas para caber dentro de uma largura máxima no canvas
 function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const lines: string[] = [];
   let line = "";
@@ -225,6 +231,7 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
   return lines;
 }
 
+//Gera uma miniatura automática para arquivos EPUB usando a primeira seção de leitura do documento
 async function createEpubThumbnail(file: File): Promise<File> {
   const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
   const containerFile = entries["META-INF/container.xml"];
@@ -295,6 +302,7 @@ export async function createAutomaticThumbnail(file: File): Promise<File | null>
   return null;
 }
 
+//Transcodifica arquivos de mídia (áudio, vídeo, imagens, PDF e EPUB) para formatos compatíveis com a plataforma, mantendo a qualidade e o tamanho do arquivo dentro de limites razoáveis
 export async function transcodePublicationFile(
   file: File,
   onProgress: (progress: number) => void = () => undefined,
@@ -306,7 +314,7 @@ export async function transcodePublicationFile(
 
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (file.type === "image/gif" || extension === "gif") {
-    return { file: await transcodeWithFFmpeg(file, onProgress), duration: 0 };
+    return { file: await transcodeWithFFmpeg(file, onProgress, 0), duration: 0 };
   }
 
   if (file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp"].includes(extension ?? "")) {
@@ -321,9 +329,10 @@ export async function transcodePublicationFile(
     return { file, duration: 0 };
   }
 
-  return { file: await transcodeWithFFmpeg(file, onProgress), duration };
+  return { file: await transcodeWithFFmpeg(file, onProgress, duration), duration };
 }
 
+//Converte o canvas, que contem a miniatura, para um arquivo WebP
 function canvasToWebpFile(canvas: HTMLCanvasElement, name: string, quality: number): Promise<File> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
