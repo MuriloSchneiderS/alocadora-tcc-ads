@@ -66,10 +66,10 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
           </div>
         </section>
 
-        <nav className="mt-1 flex border-b border-white/15" aria-label="Seções do canal">
-          <a href="#inicio" className="bg-cream px-10 py-2 text-lg text-ink">Início</a>
-          <a href="#publicacoes" className="border-r border-white/15 px-5 py-2 text-lg hover:bg-panel">Publicações</a>
-          <a href="#catalogos" className="border-r border-white/15 px-5 py-2 text-lg hover:bg-panel">Catálogos</a>
+        <nav className="mt-1 flex min-w-0 border-b border-white/15" aria-label="Seções do canal">
+          <a href="#inicio" className="whitespace-nowrap bg-cream px-3 py-2 text-sm text-ink sm:px-10 sm:text-lg">Início</a>
+          <a href="#publicacoes" className="whitespace-nowrap border-r border-white/15 px-3 py-2 text-sm hover:bg-panel sm:px-5 sm:text-lg">Publicações</a>
+          <a href="#catalogos" className="whitespace-nowrap border-r border-white/15 px-3 py-2 text-sm hover:bg-panel sm:px-5 sm:text-lg">Catálogos</a>
           <input className="ml-1 hidden flex-1 bg-transparent px-3 text-xs placeholder:text-cream/60 sm:block" placeholder="PESQUISAR" aria-label="Pesquisar no canal" />
         </nav>
 

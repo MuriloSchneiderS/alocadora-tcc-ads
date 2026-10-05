@@ -1,5 +1,6 @@
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
+import ChannelInfo from "../components/ChannelInfo";
 import VideoPlayer from "../components/VideoPlayer";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -71,10 +72,13 @@ export default async function Exibicao({ searchParams }: { searchParams: SearchP
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <div className="aspect-video overflow-hidden bg-black lg:min-h-[60vh] lg:aspect-auto"><MediaViewer media={media} /></div>
-          <aside className="bg-panel p-3">
-            <h1 className="mt-2 text-xl font-semibold text-white">{media.title}</h1>
-            <p className="mt-2 text-sm leading-tight text-cream/80">{media.description}</p>
-            <div className="mt-6 flex items-center justify-between"><button type="button" className="bg-panel-muted px-5 py-2 text-xl hover:bg-gold hover:text-navy">Seguir</button><div className="text-right"><p className="text-lg">Alberto Mielgo</p><p className="text-xs text-cream/70">diretor, pintor e animador</p></div></div>
+          <aside className="flex flex-col bg-panel p-3">
+            <h1 className="order-1 mt-2 text-xl font-semibold text-white">{media.title}</h1>
+            <div className="order-3 mt-4 flex items-center justify-between gap-3 lg:order-4 lg:mt-auto lg:border-t lg:border-white/10 lg:pt-3">
+              <button type="button" className="bg-panel-muted px-5 py-2 text-xl hover:bg-gold hover:text-navy">Seguir</button>
+              <ChannelInfo channelId="alberto-mielgo" name="Alberto Mielgo" title="Diretor e animador" avatar="https://i.pravatar.cc/160?img=12" />
+            </div>
+            <p className="order-2 mt-2 text-sm leading-tight text-cream/80 lg:order-3">{media.description}</p>
           </aside>
         </section>
         <section className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">

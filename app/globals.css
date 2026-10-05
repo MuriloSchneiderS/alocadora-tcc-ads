@@ -113,6 +113,55 @@ textarea:focus-visible {
   width: 32px;
 }
 
+@media (max-width: 639px) {
+  .channel-info {
+    gap: 5px;
+  }
+
+  .channel-name {
+    font-size: 9px;
+  }
+
+  .channel-title {
+    font-size: 8px;
+  }
+
+  .channel-avatar {
+    flex-basis: 24px;
+    height: 24px;
+    width: 24px;
+  }
+
+  .media-card-actions {
+    align-items: flex-start;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .media-card-info {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .media-card-actions .channel-info-copy {
+    text-align: left;
+  }
+
+  .media-card-actions .channel-name {
+    font-size: 8px;
+  }
+
+  .media-card-actions .channel-title {
+    font-size: 7px;
+  }
+
+  .media-card-actions .channel-avatar {
+    flex-basis: 20px;
+    height: 20px;
+    width: 20px;
+  }
+}
+
 .media-card-info {
   align-items: flex-start;
   display: flex;
