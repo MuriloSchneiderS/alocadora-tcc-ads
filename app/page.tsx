@@ -3,15 +3,16 @@ import MediaCard from "./components/MediaCard";
 import ChannelInfo from "./components/ChannelInfo";
 import AcquisitionOptions from "./components/AcquisitionOptions";
 
+//Mock
 const recommendations = [
-  { title: "OSCAR WINNER 2022 Best Animated Short 4K", image: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80", channel: { name: "Alberto Mielgo", title: "Diretor e animador", avatar: "https://i.pravatar.cc/96?img=12" }, acquisitions: [{ label: "Compre", price: "R$80" }] },
-  { title: "Semper Soma - Gruvi & Melancolia", image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=900&q=80", channel: { name: "Semper Soma", title: "Banda", avatar: "https://i.pravatar.cc/96?img=13" }, acquisitions: [{ label: "Compre", price: "R$13" }] },
-  { title: "Cityscape painting", image: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=900&q=80", channel: { name: "Alberto Mielgo", title: "Artista visual", avatar: "https://i.pravatar.cc/96?img=12" }, acquisitions: [{ label: "Compre", price: "R$250" }] },
-  { title: "Piquenique na estrada", image: "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80", channel: { name: "Arkwad Strugatsky", title: "Criador de conteúdo", avatar: "https://i.pravatar.cc/96?img=22" }, acquisitions: [{ label: "Prévia", price: "Grátis" }] },
-  { title: "Iron Lung - Oceano de sangue", image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80", channel: { name: "Markiplier", title: "Ator e influenciador", avatar: "https://i.pravatar.cc/96?img=47" }, acquisitions: [{ label: "Alugue", price: "R$5" }] },
-  { title: "O incrível circo digital", image: "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=900&q=80", channel: { name: "Glitch", title: "Estúdio de animação", avatar: "https://i.pravatar.cc/96?img=31" }, acquisitions: [{ label: "Assine", price: "R$5/mês" }] },
-  { title: "Por que todo mundo acha que 1984 concorda com eles?", image: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=900&q=80", channel: { name: "Letras Gerais", title: "Vídeo ensaio", avatar: "https://i.pravatar.cc/96?img=8" }, acquisitions: [{ label: "Compre", price: "R$15" }] },
-  { title: "You&apos;re Not Overthinking It", image: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=80", channel: { name: "Vídeo ensaio", title: "Cinema e cultura", avatar: "https://i.pravatar.cc/96?img=36" }, acquisitions: [{ label: "Assine", price: "R$20/mês" }] },
+  { title: "OSCAR WINNER 2022 Best Animated Short 4K", image: "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=900&q=80", channel: { channelId: "alberto-mielgo", name: "Alberto Mielgo", title: "Diretor e animador", avatar: "https://i.pravatar.cc/96?img=12" }, acquisitions: [{ label: "Compre", price: "R$80" }] },
+  { title: "Semper Soma - Gruvi & Melancolia", image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=900&q=80", channel: { channelId: "semper-soma", name: "Semper Soma", title: "Banda", avatar: "https://i.pravatar.cc/96?img=13" }, acquisitions: [{ label: "Compre", price: "R$13" }] },
+  { title: "Cityscape painting", image: "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=900&q=80", channel: { channelId: "alberto-mielgo", name: "Alberto Mielgo", title: "Artista visual", avatar: "https://i.pravatar.cc/96?img=12" }, acquisitions: [{ label: "Compre", price: "R$250" }] },
+  { title: "Piquenique na estrada", image: "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80", channel: { channelId: "arkwad-strugatsky", name: "Arkwad Strugatsky", title: "Criador de conteúdo", avatar: "https://i.pravatar.cc/96?img=22" }, acquisitions: [{ label: "Prévia", price: "Grátis" }] },
+  { title: "Iron Lung - Oceano de sangue", image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80", channel: { channelId: "markiplier", name: "Markiplier", title: "Ator e influenciador", avatar: "https://i.pravatar.cc/96?img=47" }, acquisitions: [{ label: "Alugue", price: "R$5" }] },
+  { title: "O incrível circo digital", image: "https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=900&q=80", channel: { channelId: "glitch", name: "Glitch", title: "Estúdio de animação", avatar: "https://i.pravatar.cc/96?img=31" }, acquisitions: [{ label: "Assine", price: "R$5/mês" }] },
+  { title: "Por que todo mundo acha que 1984 concorda com eles?", image: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=900&q=80", channel: { channelId: "letras-gerais", name: "Letras Gerais", title: "Vídeo ensaio", avatar: "https://i.pravatar.cc/96?img=8" }, acquisitions: [{ label: "Compre", price: "R$15" }] },
+  { title: "You're Not Overthinking It", image: "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=900&q=80", channel: { channelId: "video-ensaio", name: "Vídeo ensaio", title: "Cinema e cultura", avatar: "https://i.pravatar.cc/96?img=36" }, acquisitions: [{ label: "Assine", price: "R$20/mês" }] },
 ];
 
 export default function Home() {
@@ -29,7 +30,7 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <AcquisitionOptions direction="inline" options={[{ label: "Compre", price: "R$50" }, { label: "Alugue por 7 dias", price: "R$5" }]} />
-              <ChannelInfo name="Markiplier" title="Ator e influenciador" avatar="https://i.pravatar.cc/96?img=47" />
+              <ChannelInfo channelId="markiplier" name="Markiplier" title="Ator e influenciador" avatar="https://i.pravatar.cc/96?img=47" />
             </div>
           </div>
         </section>

@@ -13,9 +13,9 @@ type HeaderProps = {
 };
 
 export default function Header({ title, showSearch = true, showPublish = true }: HeaderProps) {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => onAuthStateChanged(auth, (user) => setIsLoggedIn(Boolean(user))), []);
+  useEffect(() => onAuthStateChanged(auth, (user) => setUserId(user?.uid ?? null)), []);
 
   return (
     <header className="sticky top-0 z-20 border-b border-navy/20 bg-cream text-ink">
@@ -36,7 +36,7 @@ export default function Header({ title, showSearch = true, showPublish = true }:
 
         <nav className="ml-auto flex items-center gap-3" aria-label="Ações da conta">
           {showPublish && <Link className="hidden min-w-40 bg-navy px-5 py-2 text-center text-xs font-bold text-cream hover:bg-orange hover:text-navy sm:block" href="/publicacao">PUBLICAR</Link>}
-          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" href={isLoggedIn ? "/painel_controle" : "/login"} aria-label={isLoggedIn ? "Abrir painel do perfil" : "Entrar ou criar conta"}>♙</Link>
+          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" href={userId ? `/canal/${userId}` : "/login"} aria-label={userId ? "Abrir meu canal" : "Entrar ou criar conta"}>♙</Link>
         </nav>
       </div>
     </header>

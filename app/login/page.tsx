@@ -38,14 +38,17 @@ export default function LoginPage() {
         setIsSubmitting(true);
 
         try {
+            let userId: string;
             if (isRegistering) {
                 const credential = await createUserWithEmailAndPassword(auth, email, password);
+                userId = credential.user.uid;
                 if (name.trim())
                     await updateProfile(credential.user, { displayName: name.trim() });
             } else {
-                await signInWithEmailAndPassword(auth, email, password);
+                const credential = await signInWithEmailAndPassword(auth, email, password);
+                userId = credential.user.uid;
             }
-            router.push("/painel_controle");
+            router.push(`/canal/${userId}`);
         } catch (submitError) {
             setError(getAuthErrorMessage(submitError));
         } finally {

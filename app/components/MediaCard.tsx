@@ -7,6 +7,7 @@ type MediaCardProps = {
   meta?: string;
   duration?: string;
   channel?: {
+    channelId?: string;
     name: string;
     title?: string;
     avatar: string;

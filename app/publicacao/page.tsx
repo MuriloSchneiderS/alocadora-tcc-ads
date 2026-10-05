@@ -272,7 +272,7 @@ export default function Publicacao() {
       setProgresso(100);
       setEtapa("Publicação concluída.");
       setMensagem("Publicação enviada com sucesso.");
-      router.push("/painel_controle");
+      router.push(`/canal/${usuario.uid}`);
     } catch (error) {//Em caso de erro, tenta excluir os arquivos enviados, exibe a mensagem de erro e libera os campos para nova tentativa
       if (!publicationSaved) {
         await Promise.all([
