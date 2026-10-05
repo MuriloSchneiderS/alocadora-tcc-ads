@@ -88,10 +88,13 @@ export default async function Exibicao({ searchParams }: { searchParams: SearchP
             <h2 className="mb-2 mt-5 text-sm">Recomendações</h2>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{related.map(([title, image, duration]) => <MediaCard key={`${title}-recommendation`} title={title} image={image} duration={duration} />)}</div>
           </div>
-          <section className="bg-panel" aria-label="Avaliações">
-            <div className="border-b border-white/10 p-3"><span className="text-2xl tracking-widest">☆☆☆☆☆</span><p className="mt-2 text-xs text-cream/70">MWWP720</p><p className="mt-3 text-xs">From the man who brought the amazing concept from Spider-Man into the wider verse.</p></div>
-            <div className="p-3"><span className="text-2xl tracking-widest">★★★★★</span><p className="mt-2 text-xs text-cream/70">hanaparkhill35565</p><p className="mt-3 text-xs">Alberto Mielgo is amazing. This short film is a beautiful experience.</p></div>
-          </section>
+          <div>
+            <h2 className="mb-2 text-sm">Avaliações</h2>
+            <section className="bg-panel" aria-label="Avaliações">
+              <div className="border-b border-white/10 p-3"><span className="text-2xl tracking-widest">☆☆☆☆☆</span><p className="mt-2 text-xs text-cream/70">MWWP720</p><p className="mt-3 text-xs">From the man who brought the amazing concept from Spider-Man into the wider verse.</p></div>
+              <div className="p-3"><span className="text-2xl tracking-widest">★★★★★</span><p className="mt-2 text-xs text-cream/70">hanaparkhill35565</p><p className="mt-3 text-xs">Alberto Mielgo is amazing. This short film is a beautiful experience.</p></div>
+            </section>
+          </div>
         </section>
       </main>
     </div>

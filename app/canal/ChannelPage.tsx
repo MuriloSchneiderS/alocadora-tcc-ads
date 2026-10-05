@@ -51,7 +51,7 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
         <section className="border border-white/10 bg-panel p-3 sm:p-4">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <p className="max-w-3xl whitespace-pre-line text-sm leading-tight text-cream/85">{channel.description}</p>
-            <div className="flex items-center gap-4 lg:min-w-96 lg:justify-end">
+            <div className="flex items-center gap-4 lg:min-w-96 lg:justify-end justify-content-end">
               <div className="text-right">
                 <h1 className="text-3xl text-white">{channel.name}</h1>
                 <p className="text-2xl text-cream/90">{channel.title}</p>
