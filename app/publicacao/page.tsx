@@ -1,7 +1,7 @@
 'use client';
 
 import { onAuthStateChanged } from "firebase/auth";
-import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -90,24 +90,25 @@ function hasAutomaticThumbnail(file: File) {
 }
 
 //Envia o arquivo da publicação ao Storage, com suporte a progresso e cancelamento
-async function uploadPublicationFile(publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void) {
+async function uploadPublicationFile(userId: string, publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void) {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   //Define o caminho do arquivo no Storage com base no tipo (arquivo ou miniatura)
   const path = kind === "archive"
-    ? `publicacoes/arquivos/${publicationId}/arquivo.${extension}`
-    : `publicacoes/miniaturas/${publicationId}.${extension}`;
+    ? `publicacoes/arquivos/${userId}/${publicationId}/arquivo.${extension}`
+    : `publicacoes/miniaturas/${userId}/${publicationId}/miniatura.${extension}`;
   const fileRef = ref(storage, path);//Referência do arquivo no Storage
 
   try {
-    const url = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const task = uploadBytesResumable(fileRef, file, { contentType: file.type });
       //Monitora o progresso e chama a função onProgress com o percentual concluído
       task.on("state_changed", (snapshot) => {
         onProgress(snapshot.totalBytes > 0 ? snapshot.bytesTransferred / snapshot.totalBytes : 0);
-      }, reject, () => getDownloadURL(task.snapshot.ref).then(resolve, reject));
+      }, reject, resolve);
     });
 
-    return { url, reference: fileRef };
+    const url = kind === "thumbnail" ? await getDownloadURL(fileRef) : "";
+    return { url, path, reference: fileRef };
   } catch (error) {//Em caso de erro tenta excluir o arquivo parcialmente enviado
     await deleteObject(fileRef).catch(() => undefined);
     throw error;
@@ -210,8 +211,6 @@ export default function Publicacao() {
       });
       const tipo = getPublicationType(resultado.file);
       let miniaturaConvertida: File | null = null;
-      const miniaturaUsaArquivoPrincipal = !miniatura && tipo === "imagem";
-
       if (miniatura) {
         setEtapa("Preparando miniatura selecionada...");
         setProgresso(48);
@@ -219,7 +218,7 @@ export default function Publicacao() {
         miniaturaConvertida = (await transcodePublicationFile(miniatura, (percentual) => {
           setProgresso(48 + Math.round(percentual * 7));
         })).file;
-      } else if (!miniaturaUsaArquivoPrincipal) {
+      } else {
         setEtapa("Gerando miniatura automática...");
         setProgresso(52);
         miniaturaConvertida = await createAutomaticThumbnail(arquivo);
@@ -229,13 +228,13 @@ export default function Publicacao() {
 
       //Acompanhamento do progresso de upload do arquivo principal, 35% do progresso total, de 55% a 90%
       setEtapa("Enviando arquivo principal...");
-      uploadedFile = await uploadPublicationFile(publicationRef.id, resultado.file, "archive", (percentual) => {
+      uploadedFile = await uploadPublicationFile(usuario.uid, publicationRef.id, resultado.file, "archive", (percentual) => {
         setProgresso(55 + Math.round(percentual * 35));
       });
 
-      let miniaturaUrl = miniaturaUsaArquivoPrincipal ? uploadedFile.url : "";
+      let miniaturaUrl = "";
       uploadedThumbnail = miniaturaConvertida
-        ? await uploadPublicationFile(publicationRef.id, miniaturaConvertida, "thumbnail", (percentual) => {
+        ? await uploadPublicationFile(usuario.uid, publicationRef.id, miniaturaConvertida, "thumbnail", (percentual) => {
           setEtapa("Enviando miniatura...");
           setProgresso(90 + Math.round(percentual * 8));
         })
@@ -253,21 +252,22 @@ export default function Publicacao() {
         tipo,
         tamanho: resultado.file.size,
         duracao: resultado.duration,
-        arquivo: uploadedFile.url,
+        arquivo: uploadedFile.path,
         miniatura: miniaturaUrl,
         catalogos: catalogos.filter(Boolean),
       });
       publicationSaved = true;
 
       //Salva as monetizações no subcoleção "monetizacao" da publicação, convertendo os preços para centavos
-      await Promise.all(monetizacoes.map(({ modelo, preco }) => addDoc(
-        collection(db, "publicacao", publicationRef.id, "monetizacao"),
-        {
-          tipo: modelo === "Gratuito com anúncios" ? "gratuito" : modelo === "Aluguel" ? "aluguel" : "compra",
+      await Promise.all(monetizacoes.map(({ modelo, preco }) => {
+        const tipoMonetizacao = modelo === "Gratuito com anúncios" ? "gratuito" : modelo === "Aluguel" ? "aluguel" : "compra";
+        return setDoc(doc(db, "publicacao", publicationRef.id, "monetizacao", tipoMonetizacao), {
+          tipo: tipoMonetizacao,
           preco: modelo === "Gratuito com anúncios" ? 0 : converterParaCentavos(preco),
           moeda: "BRL",
-        },
-      )));
+          ativo: true,
+        });
+      }));
 
       setProgresso(100);
       setEtapa("Publicação concluída.");

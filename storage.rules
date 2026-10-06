@@ -1,19 +1,53 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
-    match /publicacoes/arquivos/{publicacaoId}/{fileName} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && resource == null && request.resource.size > 0;
+    function hasFreePublicationAccess(publicationId) {
+      return firestore.exists(
+          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
+        )
+        && firestore.get(
+          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
+        ).data.ativo == true
+        && firestore.get(
+          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
+        ).data.preco == 0;
+    }
+
+    function hasCurrentEntitlement(userId, publicationId) {
+      return firestore.exists(
+          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
+        )
+        && firestore.get(
+          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
+        ).data.ativo == true
+        && (firestore.get(
+          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
+        ).data.get('expira_em', null) == null
+          || firestore.get(
+            /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
+          ).data.expira_em > request.time);
+    }
+
+    match /publicacoes/arquivos/{userId}/{publicationId}/{fileName} {
+      allow read: if (request.auth != null && request.auth.uid == userId)
+        || hasFreePublicationAccess(publicationId)
+        || (request.auth != null && hasCurrentEntitlement(request.auth.uid, publicationId));
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && resource == null
+        && request.resource.size > 0;
       allow update, delete: if false;
     }
 
-    match /publicacoes/miniaturas/{fileName} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && resource == null && request.resource.size > 0;
+    match /publicacoes/miniaturas/{userId}/{publicationId}/{fileName} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && resource == null
+        && request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
       allow update, delete: if false;
     }
 
