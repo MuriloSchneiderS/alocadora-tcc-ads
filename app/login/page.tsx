@@ -9,9 +9,6 @@ import { useRouter } from "next/navigation";
 import { auth } from "../../lib/firebase";
 
 function getAuthErrorMessage(error: unknown) {
-    if (!(error instanceof FirebaseError))
-        return "Não foi possível concluir a operação. Tente novamente.";
-
     const messages: Record<string, string> = {
         "auth/email-already-in-use": "Este e-mail já está cadastrado.",
         "auth/invalid-credential": "E-mail ou senha incorretos.",
@@ -20,6 +17,8 @@ function getAuthErrorMessage(error: unknown) {
         "auth/network-request-failed": "Não foi possível conectar ao Firebase.",
     };
 
+    if (!(error instanceof FirebaseError))
+        return "Não foi possível concluir a operação. Tente novamente.";
     return messages[error.code] ?? "Não foi possível concluir a operação. Tente novamente.";
 }
 
@@ -38,17 +37,12 @@ export default function LoginPage() {
         setIsSubmitting(true);
 
         try {
-            let userId: string;
-            if (isRegistering) {
-                const credential = await createUserWithEmailAndPassword(auth, email, password);
-                userId = credential.user.uid;
-                if (name.trim())
-                    await updateProfile(credential.user, { displayName: name.trim() });
-            } else {
-                const credential = await signInWithEmailAndPassword(auth, email, password);
-                userId = credential.user.uid;
-            }
-            router.push(`/canal/${userId}`);
+            const credential = isRegistering
+                ? await createUserWithEmailAndPassword(auth, email, password)
+                : await signInWithEmailAndPassword(auth, email, password);
+            if (isRegistering && name.trim())
+                await updateProfile(credential.user, { displayName: name.trim() });
+            router.push(`/canal/${credential.user.uid}`);
         } catch (submitError) {
             setError(getAuthErrorMessage(submitError));
         } finally {

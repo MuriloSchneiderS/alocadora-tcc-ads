@@ -1,28 +1,20 @@
 "use client";
 
-import { onAuthStateChanged, User } from "firebase/auth";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
-import { auth } from "../../lib/firebase";
 import { MOCK_CHANNELS } from "../../lib/mock-channels";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
+import { useAuth } from "../providers";
 
 type ChannelPageProps = {
   channelId: string;
 };
 
 export default function ChannelPage({ channelId }: ChannelPageProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
+  const { user, isLoading } = useAuth();
 
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
-    setUser(currentUser);
-    setAuthResolved(true);
-  }), []);
-
-  if (!authResolved)
+  if (isLoading)
     return <main className="flex min-h-screen items-center justify-center bg-ink text-sm text-cream">Carregando canal...</main>;
 
   const isOwnChannel = Boolean(user && user.uid === channelId);

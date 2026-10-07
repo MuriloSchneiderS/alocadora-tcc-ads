@@ -1,14 +1,13 @@
 'use client';
 
-import { onAuthStateChanged } from "firebase/auth";
-import { addDoc, collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import UploadZone from "../components/UploadZone";
-import { auth, db, storage } from "../../lib/firebase";
+import { storage } from "../../lib/firebase";
 import { createAutomaticThumbnail, transcodePublicationFile } from "../../lib/transcode";
+import { useAuth } from "../providers";
 
 const modelosMonetizacao = ["Gratuito com anúncios", "Aluguel", "Compra avulsa"];
 const formatosArquivo = {
@@ -90,24 +89,25 @@ function hasAutomaticThumbnail(file: File) {
 }
 
 //Envia o arquivo da publicação ao Storage, com suporte a progresso e cancelamento
-async function uploadPublicationFile(publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void) {
+async function uploadPublicationFile(userId: string, publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void) {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   //Define o caminho do arquivo no Storage com base no tipo (arquivo ou miniatura)
   const path = kind === "archive"
-    ? `publicacoes/arquivos/${publicationId}/arquivo.${extension}`
-    : `publicacoes/miniaturas/${publicationId}.${extension}`;
+    ? `publicacoes/arquivos/${userId}/${publicationId}/arquivo.${extension}`
+    : `publicacoes/miniaturas/${userId}/${publicationId}/miniatura.${extension}`;
   const fileRef = ref(storage, path);//Referência do arquivo no Storage
 
   try {
-    const url = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const task = uploadBytesResumable(fileRef, file, { contentType: file.type });
       //Monitora o progresso e chama a função onProgress com o percentual concluído
       task.on("state_changed", (snapshot) => {
         onProgress(snapshot.totalBytes > 0 ? snapshot.bytesTransferred / snapshot.totalBytes : 0);
-      }, reject, () => getDownloadURL(task.snapshot.ref).then(resolve, reject));
+      }, reject, resolve);
     });
 
-    return { url, reference: fileRef };
+    const url = kind === "thumbnail" ? await getDownloadURL(fileRef) : "";
+    return { url, path, reference: fileRef };
   } catch (error) {//Em caso de erro tenta excluir o arquivo parcialmente enviado
     await deleteObject(fileRef).catch(() => undefined);
     throw error;
@@ -116,8 +116,7 @@ async function uploadPublicationFile(publicationId: string, file: File, kind: "a
 
 export default function Publicacao() {
   const router = useRouter();
-  const [sessaoVerificada, setSessaoVerificada] = useState(false);//Estado para verificar se a sessão do usuário foi verificada
-  const [autenticado, setAutenticado] = useState(false);//Estado para verificar se o usuário está autenticado
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [monetizacoes, setMonetizacoes] = useState([//Estado para armazenar as monetizações da publicação
     { modelo: "Gratuito com anúncios", preco: "" },
   ]);
@@ -133,12 +132,10 @@ export default function Publicacao() {
   const [progresso, setProgresso] = useState(0);
   const [etapa, setEtapa] = useState("");
 
-  //Verifica a sessão do usuário ao montar o componente
-  useEffect(() => onAuthStateChanged(auth, (usuario) => {
-    setAutenticado(Boolean(usuario));
-    setSessaoVerificada(true);
-    if (!usuario) router.replace("/login");//Redireciona para a página de login se o usuário não estiver autenticado
-  }), [router]);
+  useEffect(() => {
+    if (!isAuthLoading && !user)
+      router.replace("/login");
+  }, [isAuthLoading, router, user]);
 
   //Função para atualizar o modelo ou preço de uma monetização
   function atualizarMonetizacao(index: number, campo: "modelo" | "preco", valor: string) {
@@ -201,7 +198,7 @@ export default function Publicacao() {
     let publicationSaved = false;
 
     try {
-      const usuario = auth.currentUser;
+      const usuario = user;
       if (!usuario) throw new Error("Sua sessão expirou. Entre novamente.");
 
       setEtapa("Convertendo arquivo principal...");
@@ -210,8 +207,6 @@ export default function Publicacao() {
       });
       const tipo = getPublicationType(resultado.file);
       let miniaturaConvertida: File | null = null;
-      const miniaturaUsaArquivoPrincipal = !miniatura && tipo === "imagem";
-
       if (miniatura) {
         setEtapa("Preparando miniatura selecionada...");
         setProgresso(48);
@@ -219,23 +214,23 @@ export default function Publicacao() {
         miniaturaConvertida = (await transcodePublicationFile(miniatura, (percentual) => {
           setProgresso(48 + Math.round(percentual * 7));
         })).file;
-      } else if (!miniaturaUsaArquivoPrincipal) {
+      } else {
         setEtapa("Gerando miniatura automática...");
         setProgresso(52);
         miniaturaConvertida = await createAutomaticThumbnail(arquivo);
       }
 
-      const publicationRef = doc(collection(db, "publicacao"));
+      const publicationId = crypto.randomUUID();
 
       //Acompanhamento do progresso de upload do arquivo principal, 35% do progresso total, de 55% a 90%
       setEtapa("Enviando arquivo principal...");
-      uploadedFile = await uploadPublicationFile(publicationRef.id, resultado.file, "archive", (percentual) => {
+      uploadedFile = await uploadPublicationFile(usuario.uid, publicationId, resultado.file, "archive", (percentual) => {
         setProgresso(55 + Math.round(percentual * 35));
       });
 
-      let miniaturaUrl = miniaturaUsaArquivoPrincipal ? uploadedFile.url : "";
+      let miniaturaUrl = "";
       uploadedThumbnail = miniaturaConvertida
-        ? await uploadPublicationFile(publicationRef.id, miniaturaConvertida, "thumbnail", (percentual) => {
+        ? await uploadPublicationFile(usuario.uid, publicationId, miniaturaConvertida, "thumbnail", (percentual) => {
           setEtapa("Enviando miniatura...");
           setProgresso(90 + Math.round(percentual * 8));
         })
@@ -245,29 +240,41 @@ export default function Publicacao() {
 
       setEtapa("Salvando publicação...");
       setProgresso(98);
-      await setDoc(publicationRef, {
-        criador: usuario.uid,
-        titulo: titulo.trim(),
-        descricao: descricao.trim(),
-        data_criacao: serverTimestamp(),
-        tipo,
-        tamanho: resultado.file.size,
-        duracao: resultado.duration,
-        arquivo: uploadedFile.url,
-        miniatura: miniaturaUrl,
-        catalogos: catalogos.filter(Boolean),
-      });
-      publicationSaved = true;
-
-      //Salva as monetizações no subcoleção "monetizacao" da publicação, convertendo os preços para centavos
-      await Promise.all(monetizacoes.map(({ modelo, preco }) => addDoc(
-        collection(db, "publicacao", publicationRef.id, "monetizacao"),
-        {
-          tipo: modelo === "Gratuito com anúncios" ? "gratuito" : modelo === "Aluguel" ? "aluguel" : "compra",
-          preco: modelo === "Gratuito com anúncios" ? 0 : converterParaCentavos(preco),
-          moeda: "BRL",
+      const response = await fetch("/api/content", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await usuario.getIdToken()}`,
         },
-      )));
+        body: JSON.stringify({
+          publicationId,
+          titulo: titulo.trim(),
+          descricao: descricao.trim(),
+          tipo,
+          tamanho: resultado.file.size,
+          duracao: resultado.duration,
+          arquivo: uploadedFile.path,
+          miniatura: miniaturaUrl,
+          catalogos: catalogos.filter(Boolean),
+          monetizacoes: monetizacoes.map(({ modelo, preco }) => ({
+            tipo: modelo === "Gratuito com anúncios" ? "gratuito" : modelo === "Aluguel" ? "aluguel" : "compra",
+            preco: modelo === "Gratuito com anúncios" ? 0 : converterParaCentavos(preco),
+          })),
+        }),
+      });
+      const responseBody = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        if (responseBody?.error === "unauthorized")
+          throw new Error("Sua sessão expirou. Entre novamente.");
+        if (responseBody?.error === "firebase-configuration")
+          throw new Error("As variáveis NEXT_PUBLIC_FIREBASE_API_KEY e NEXT_PUBLIC_FIREBASE_PROJECT_ID precisam estar configuradas no servidor.");
+        if (responseBody?.error === "firebase-unavailable")
+          throw new Error("Não foi possível conectar aos serviços Firebase. Os arquivos foram enviados, mas os metadados não puderam ser salvos.");
+        if (response.status === 403)
+          throw new Error("O Firebase negou a gravação no Firestore. Verifique as regras de segurança e tente novamente.");
+        throw new Error("Não foi possível salvar a publicação.");
+      }
+      publicationSaved = true;
 
       setProgresso(100);
       setEtapa("Publicação concluída.");
@@ -289,12 +296,12 @@ export default function Publicacao() {
   }
 
   //Renderiza uma mensagem de carregamento ou redirecionamento enquanto a sessão do usuário está sendo verificada
-  if (!sessaoVerificada || !autenticado) {
+  if (isAuthLoading || !user) {
     return (
       <div className="flex min-h-screen flex-col bg-ink text-cream">
         <Header showSearch={false} showPublish={false} />
         <main className="flex flex-1 items-center justify-center" aria-live="polite">
-          <p>{sessaoVerificada ? "Redirecionando para o login..." : "Verificando sessão..."}</p>
+          <p>{isAuthLoading ? "Verificando sessão..." : "Redirecionando para o login..."}</p>
         </main>
       </div>
     );

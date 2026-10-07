@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuthProvider } from "./providers";
 import "./globals.css";
 import "video.js/dist/video-js.css";
 
@@ -19,7 +20,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-slate-950 text-slate-50">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

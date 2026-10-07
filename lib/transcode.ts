@@ -295,7 +295,21 @@ async function createEpubThumbnail(file: File): Promise<File> {
 
 export async function createAutomaticThumbnail(file: File): Promise<File | null> {
   const extension = file.name.split(".").pop()?.toLowerCase();
-  if (file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension ?? "")) return null;
+  if (file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension ?? "")) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close();
+      throw new Error("Este navegador nao conseguiu preparar a miniatura.");
+    }
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return canvasToWebpFile(canvas, `${file.name.replace(/\.[^.]+$/, "")}-miniatura.webp`, 0.55);
+  }
   if (file.type.startsWith("video/") || ["mp4", "avi", "mkv", "mov", "webm"].includes(extension ?? "")) return createVideoThumbnail(file);
   if (file.type === "application/pdf" || extension === "pdf") return createPdfThumbnail(file);
   if (file.type === "application/epub+zip" || extension === "epub") return createEpubThumbnail(file);

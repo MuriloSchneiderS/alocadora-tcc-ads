@@ -6,29 +6,105 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    match /publicacao/{publicationId} {
-      allow read: if true;
-      allow create: if signedIn()
-        && request.resource.data.keys().hasAll([
+    function ownsCatalog(catalogId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/catalogo/$(catalogId)).data.criador == request.auth.uid;
+    }
+
+    function validPublication(data) {
+      return data.keys().hasAll([
           'criador', 'titulo', 'descricao', 'data_criacao', 'tipo', 'tamanho',
           'duracao', 'miniatura', 'arquivo', 'catalogos'
         ])
-        && request.resource.data.keys().hasOnly([
+        && data.keys().hasOnly([
           'criador', 'titulo', 'descricao', 'data_criacao', 'tipo', 'tamanho',
           'duracao', 'miniatura', 'arquivo', 'catalogos'
+        ])
+        && data.titulo is string
+        && data.descricao is string
+        && data.data_criacao is timestamp
+        && data.tipo in ['imagem', 'video', 'audio', 'livro']
+        && data.tamanho is int
+        && data.tamanho >= 0
+        && data.duracao is number
+        && data.catalogos is list
+        && data.arquivo is string
+        && data.arquivo.size() > 0
+        && data.miniatura is string;
+    }
+
+    function validMonetization(data, monetizationId, isCatalog) {
+      return data.keys().hasAll(['tipo', 'preco', 'moeda', 'ativo'])
+        && data.keys().hasOnly(['tipo', 'preco', 'moeda', 'ativo', 'duracao'])
+        && (isCatalog
+          ? data.tipo in ['gratuito', 'aluguel', 'compra', 'assinatura']
+          : data.tipo in ['gratuito', 'aluguel', 'compra'])
+        && monetizationId == data.tipo
+        && data.preco is int
+        && data.preco >= 0
+        && data.moeda == 'BRL'
+        && data.ativo is bool
+        && (data.tipo != 'gratuito' || data.preco == 0)
+        && (!('duracao' in data) || (data.duracao is int && data.duracao > 0))
+        && (!isCatalog || !(data.tipo in ['aluguel', 'assinatura']) || ('duracao' in data && data.duracao is int && data.duracao > 0));
+    }
+
+    match /usuario/{userId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['nome', 'titulo', 'descricao', 'avatar'])
+        && request.resource.data.nome is string;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'nome', 'titulo', 'descricao', 'avatar'
+        ]);
+      allow delete: if false;
+    }
+
+    match /catalogo/{catalogId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasAll([
+          'titulo', 'descricao', 'miniatura', 'data_criacao', 'criador', 'publicacoes'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'titulo', 'descricao', 'miniatura', 'data_criacao', 'criador', 'publicacoes'
         ])
         && request.resource.data.criador == request.auth.uid
         && request.resource.data.titulo is string
         && request.resource.data.descricao is string
-        && request.resource.data.tipo in ['imagem', 'video', 'audio', 'livro']
-        && request.resource.data.tamanho is int
-        && request.resource.data.tamanho >= 0
-        && request.resource.data.duracao is number
-        && request.resource.data.catalogos is list;
+        && request.resource.data.miniatura is string
+        && request.resource.data.data_criacao is timestamp
+        && request.resource.data.publicacoes is list;
       allow update: if signedIn()
         && resource.data.criador == request.auth.uid
         && request.resource.data.criador == resource.data.criador
         && request.resource.data.data_criacao == resource.data.data_criacao
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'titulo', 'descricao', 'miniatura', 'publicacoes'
+        ]);
+      allow delete: if false;
+
+      match /monetizacao/{monetizationId} {
+        allow read: if true;
+        allow create, update: if ownsCatalog(catalogId)
+          && validMonetization(request.resource.data, monetizationId, true);
+        allow delete: if ownsCatalog(catalogId);
+      }
+    }
+
+    match /publicacao/{publicationId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.criador == request.auth.uid
+        && validPublication(request.resource.data);
+      allow update: if signedIn()
+        && resource.data.criador == request.auth.uid
+        && request.resource.data.criador == resource.data.criador
+        && request.resource.data.data_criacao == resource.data.data_criacao
+        && validPublication(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'titulo', 'descricao', 'tamanho', 'duracao', 'miniatura', 'arquivo', 'catalogos'
         ]);
@@ -36,15 +112,24 @@ service cloud.firestore {
 
       match /monetizacao/{monetizationId} {
         allow read: if true;
-        allow create: if signedIn()
+        allow create, update: if signedIn()
           && get(/databases/$(database)/documents/publicacao/$(publicationId)).data.criador == request.auth.uid
-          && request.resource.data.keys().hasOnly(['tipo', 'preco', 'moeda'])
-          && request.resource.data.tipo in ['gratuito', 'aluguel', 'compra']
-          && request.resource.data.preco is int
-          && request.resource.data.preco >= 0
-          && request.resource.data.moeda == 'BRL';
-        allow update, delete: if false;
+          && validMonetization(request.resource.data, monetizationId, false);
+        allow delete: if signedIn()
+          && get(/databases/$(database)/documents/publicacao/$(publicationId)).data.criador == request.auth.uid;
       }
+    }
+
+    // Entitlements and transactions are written only by trusted server code (Admin SDK).
+    match /acesso/{userId}/publicacoes/{publicationId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /transacao/{transactionId} {
+      allow read: if signedIn()
+        && (resource.data.comprador == request.auth.uid || resource.data.vendedor == request.auth.uid);
+      allow write: if false;
     }
 
     match /{document=**} {

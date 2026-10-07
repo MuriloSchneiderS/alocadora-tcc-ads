@@ -1,12 +1,13 @@
 "use client";
 
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { signOut } from "firebase/auth";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import Header from "../components/Header";
 import UploadZone from "../components/UploadZone";
 import { auth } from "../../lib/firebase";
+import { useAuth } from "../providers";
 
 //Mock para demonstração
 const publicationStats = [["Gratuitos", "25"], ["À venda", "1"], ["Alugáveis", "1"], ["Playlists / Catálogos", "1"]];
@@ -33,22 +34,19 @@ function StatRow({ title, items, total }: { title: string; items: string[][]; to
 
 export default function PainelControle() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { user, isLoading } = useAuth();
 
-  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
-    setUser(currentUser);
-    setIsCheckingAuth(false);
-    if (!currentUser)
+  useEffect(() => {
+    if (!isLoading && !user)
       router.replace("/login");
-  }), [router]);
+  }, [isLoading, router, user]);
 
   async function handleSignOut() {
     await signOut(auth);
     router.replace("/");
   }
 
-  if (isCheckingAuth || !user)
+  if (isLoading || !user)
     return <main className="flex min-h-screen items-center justify-center bg-ink text-sm text-cream">Carregando painel...</main>;
 
   return <div className="min-h-screen bg-ink text-cream">
