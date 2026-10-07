@@ -326,26 +326,36 @@ export default function Publicacao() {
         <div className="grid gap-3 pt-2 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
             {catalogos.map((catalogo, index) => (
-              <div className="grid grid-cols-2 gap-3" key={index}>
-                <label className="text-center text-sm">
-                  <span className={index === 0 ? "" : "sr-only"}>Catálogo:</span>
-                  <select
-                    className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs"
-                    value={catalogo}
-                    onChange={(event) => setCatalogos((atuais) => atuais.map((atual, atualIndex) => atualIndex === index ? event.target.value : atual))}
-                  >
-                    <option value="">Selecionar</option>
-                  </select>
-                </label>
-                <label className="text-center text-sm">
-                  <span className={index === 0 ? "" : "sr-only"}>Preço do catálogo:</span>
-                  <input
-                    className="mt-1 block w-full cursor-not-allowed bg-panel-muted px-2 py-1 text-xs opacity-70"
-                    value=""
-                    placeholder="Definido pelo catálogo"
-                    readOnly
-                  />
-                </label>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2" key={index}>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-center text-sm">
+                    <span className={index === 0 ? "" : "sr-only"}>Catálogo:</span>
+                    <select
+                      className="mt-1 block h-8 w-full bg-panel-muted px-1 text-left text-xs"
+                      value={catalogo}
+                      onChange={(event) => setCatalogos((atuais) => atuais.map((atual, atualIndex) => atualIndex === index ? event.target.value : atual))}
+                    >
+                      <option value="">Selecionar</option>
+                    </select>
+                  </label>
+                  <label className="text-center text-sm">
+                    <span className={index === 0 ? "" : "sr-only"}>Preço do catálogo:</span>
+                    <input
+                      className="mt-1 block h-8 w-full cursor-not-allowed bg-panel-muted px-2 text-xs opacity-70"
+                      value=""
+                      placeholder="Definido pelo catálogo"
+                      readOnly
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  className="h-8 bg-panel-muted px-2 text-xs hover:bg-red hover:text-white"
+                  aria-label={`Remover catálogo ${index + 1}`}
+                  onClick={() => setCatalogos((atuais) => atuais.filter((_, atualIndex) => atualIndex !== index))}
+                >
+                  Remover
+                </button>
               </div>
             ))}
             <button
@@ -358,42 +368,54 @@ export default function Publicacao() {
           </div>
           <div className="space-y-2 md:col-span-2">
             {monetizacoes.map((monetizacao, index) => (
-              <div className="grid grid-cols-2 gap-3" key={index}>
-                <label className="text-center text-sm">
-                  <span className={index === 0 ? "" : "sr-only"}>Modelo de monetização:</span>
-                  <select
-                    className="mt-1 block w-full bg-panel-muted px-1 py-1 text-left text-xs"
-                    value={monetizacao.modelo}
-                    onChange={(event) => atualizarMonetizacao(index, "modelo", event.target.value)}
-                  >
-                    {modelosMonetizacao.map((modelo) => (
-                      <option
-                        key={modelo}
-                        value={modelo}
-                        disabled={monetizacoes.some((outra, outroIndex) => outroIndex !== index && outra.modelo === modelo)}
-                      >
-                        {modelo}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-center text-sm">
-                  <span className={index === 0 ? "" : "sr-only"}>Preço (R$):</span>
-                  <span className="mt-1 flex items-center bg-panel-muted px-2 py-1 text-xs focus-within:outline-1 focus-within:outline-gold">
-                    <span aria-hidden="true" className="mr-1 text-cream/70">R$</span>
-                    <input
-                      className="min-w-0 flex-1 bg-transparent outline-none disabled:cursor-not-allowed"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      aria-label={`Preço em reais para ${monetizacao.modelo}`}
-                      value={monetizacao.preco}
-                      disabled={monetizacao.modelo === "Gratuito com anúncios"}
-                      onChange={(event) => atualizarMonetizacao(index, "preco", event.target.value)}
-                      onBlur={(event) => atualizarMonetizacao(index, "preco", formatarReaisCentavos(event.target.value, true))}
-                    />
-                  </span>
-                </label>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2" key={index}>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-center text-sm">
+                    <span className={index === 0 ? "" : "sr-only"}>Modelo de monetização:</span>
+                    <select
+                      className="mt-1 block h-8 w-full bg-panel-muted px-1 text-left text-xs"
+                      value={monetizacao.modelo}
+                      onChange={(event) => atualizarMonetizacao(index, "modelo", event.target.value)}
+                    >
+                      {modelosMonetizacao.map((modelo) => (
+                        <option
+                          key={modelo}
+                          value={modelo}
+                          disabled={monetizacoes.some((outra, outroIndex) => outroIndex !== index && outra.modelo === modelo)}
+                        >
+                          {modelo}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-center text-sm">
+                    <span className={index === 0 ? "" : "sr-only"}>Preço (R$):</span>
+                    <span className="mt-1 flex h-8 items-center bg-panel-muted px-2 text-xs focus-within:outline-1 focus-within:outline-gold">
+                      <span aria-hidden="true" className="mr-1 text-cream/70">R$</span>
+                      <input
+                        className="min-w-0 flex-1 bg-transparent outline-none disabled:cursor-not-allowed"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        aria-label={`Preço em reais para ${monetizacao.modelo}`}
+                        value={monetizacao.preco}
+                        disabled={monetizacao.modelo === "Gratuito com anúncios"}
+                        onChange={(event) => atualizarMonetizacao(index, "preco", event.target.value)}
+                        onBlur={(event) => atualizarMonetizacao(index, "preco", formatarReaisCentavos(event.target.value, true))}
+                      />
+                    </span>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  className="h-8 bg-panel-muted px-2 text-xs hover:bg-red hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={`Remover monetização ${monetizacao.modelo}`}
+                  disabled={monetizacoes.length <= 1}
+                  title={monetizacoes.length <= 1 ? "Mantenha ao menos uma opção de monetização" : undefined}
+                  onClick={() => setMonetizacoes((atuais) => atuais.filter((_, atualIndex) => atualIndex !== index))}
+                >
+                  Remover
+                </button>
               </div>
             ))}
             <button
