@@ -30,8 +30,15 @@ export default function Header({ title, showSearch = true, showPublish = true }:
         )}
 
         <nav className="order-2 ml-auto flex items-center gap-2 sm:order-none sm:gap-3" aria-label="Ações da conta">
-          {showPublish && <Link className="min-w-0 bg-navy px-2 py-2 text-center text-[10px] font-bold text-cream hover:bg-orange hover:text-navy sm:min-w-40 sm:px-5 sm:text-xs" href="/publicacao">PUBLICAR</Link>}
-          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" href={user ? `/canal/${user.uid}` : "/login"} aria-label={user ? "Abrir meu canal" : "Entrar ou criar conta"}>♙</Link>
+          {showPublish && 
+            <Link className="min-w-0 bg-navy px-2 py-2 text-center text-[10px] font-bold text-cream hover:bg-orange hover:text-navy sm:min-w-40 sm:px-5 sm:text-xs" href="/publicacao">
+              PUBLICAR
+            </Link>
+          }
+          <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" 
+          href={user ? `/canal/${user.uid}` : "/login"} aria-label={user ? "Abrir meu canal" : "Entrar ou criar conta"}>
+          ♙
+          </Link>
         </nav>
       </div>
     </header>

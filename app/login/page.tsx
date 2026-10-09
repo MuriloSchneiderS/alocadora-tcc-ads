@@ -1,12 +1,14 @@
 "use client";
 
 import { FirebaseError } from "firebase/app";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { auth } from "../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
+import { createDefaultUserProfile } from "../../lib/user-profile";
 
 function getAuthErrorMessage(error: unknown) {
     const messages: Record<string, string> = {
@@ -37,11 +39,24 @@ export default function LoginPage() {
         setIsSubmitting(true);
 
         try {
+            if (isRegistering && !name.trim()) {
+                setError("Informe seu nome.");
+                return;
+            }
+
             const credential = isRegistering
                 ? await createUserWithEmailAndPassword(auth, email, password)
                 : await signInWithEmailAndPassword(auth, email, password);
-            if (isRegistering && name.trim())
-                await updateProfile(credential.user, { displayName: name.trim() });
+            if (isRegistering) {
+                const profile = createDefaultUserProfile(name.trim());
+                try {
+                    await updateProfile(credential.user, { displayName: profile.nome });
+                    await setDoc(doc(db, "usuario", credential.user.uid), profile);
+                } catch (profileError) {
+                    await deleteUser(credential.user).catch(() => undefined);
+                    throw profileError;
+                }
+            }
             router.push(`/canal/${credential.user.uid}`);
         } catch (submitError) {
             setError(getAuthErrorMessage(submitError));
@@ -68,7 +83,7 @@ export default function LoginPage() {
                     {isRegistering &&
                         <div>
                             <label className="mb-1 block text-xs font-bold uppercase" htmlFor="name">Nome</label>
-                            <input id="name" value={name} onChange={(event) => setName(event.target.value)} className="w-full border border-white/20 bg-ink px-3 py-3 text-sm text-white" autoComplete="name" />
+                            <input id="name" value={name} onChange={(event) => setName(event.target.value)} className="w-full border border-white/20 bg-ink px-3 py-3 text-sm text-white" autoComplete="name" required />
                         </div>
                     }
                     <div>

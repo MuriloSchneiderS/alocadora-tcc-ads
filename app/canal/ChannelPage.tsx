@@ -1,8 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { doc, getDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
 
 import { MOCK_CHANNELS } from "../../lib/mock-channels";
+import { db } from "../../lib/firebase";
+import { DEFAULT_CHANNEL_DESCRIPTION, DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR, type UserProfile } from "../../lib/user-profile";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 import { useAuth } from "../providers";
@@ -12,20 +16,36 @@ type ChannelPageProps = {
 };
 
 export default function ChannelPage({ channelId }: ChannelPageProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();//hook que retorna o usuário logado e se está carregando
+  const [loadedProfile, setLoadedProfile] = useState<{ uid: string; profile: UserProfile } | null>(null);//state para armazenar o perfil do usuário carregado do Firestore
+
+  //Carrega o perfil do usuário logado do Firestore se o canal for do usuário logado
+  useEffect(() => {
+    if (!user || user.uid !== channelId) return;
+
+    let isCurrent = true;
+    getDoc(doc(db, "usuario", user.uid)).then((snapshot) => {
+      if (isCurrent && snapshot.exists())
+        setLoadedProfile({ uid: user.uid, profile: snapshot.data() as UserProfile });
+    }).catch(() => undefined);
+
+    return () => { isCurrent = false; };
+  }, [channelId, user]);
+
+  const userProfile = loadedProfile && loadedProfile.uid === user?.uid ? loadedProfile.profile : null;
 
   if (isLoading)
     return <main className="flex min-h-screen items-center justify-center bg-ink text-sm text-cream">Carregando canal...</main>;
 
-  const isOwnChannel = Boolean(user && user.uid === channelId);
-  const mockChannel = MOCK_CHANNELS[channelId];
+  const isOwnChannel = Boolean(user && user.uid === channelId);//true se o canal pertence ao usuário logado, false caso contrário
+  const mockChannel = MOCK_CHANNELS[channelId];//\lib\mock-channels.ts contém canais de exemplo, onde a chave é o ID do canal
   const channel = isOwnChannel && user
     ? {
       id: user.uid,
-      name: user.displayName || user.email?.split("@")[0] || "Meu canal",
-      title: "Canal do usuário",
-      avatar: user.photoURL || "https://i.pravatar.cc/160?img=68",
-      description: "Este é o seu canal. Suas publicações aparecerão aqui.",
+      name: userProfile?.nome || user.displayName || user.email?.split("@")[0] || "Meu canal",
+      title: userProfile?.titulo ?? DEFAULT_CHANNEL_TITLE,
+      avatar: userProfile?.avatar ?? user.photoURL ?? DEFAULT_USER_AVATAR,
+      description: userProfile?.descricao ?? DEFAULT_CHANNEL_DESCRIPTION,
       followers: 0,
       publications: 0,
       videos: [],
