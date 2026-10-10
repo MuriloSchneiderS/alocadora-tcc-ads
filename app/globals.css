@@ -190,6 +190,30 @@ textarea:focus-visible {
   z-index: 1;
 }
 
+.media-card-monetizations {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: calc(100% - 12px);
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  z-index: 2;
+}
+
+.media-card-monetizations span {
+  background: rgb(23 33 43 / 90%);
+  color: var(--cream);
+  font-size: 9px;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .media-card-acquisition-overlay .acquisition-label {
   background: rgb(23 33 43 / 86%);
   padding: 2px 4px;
@@ -218,6 +242,23 @@ textarea:focus-visible {
 
 .acquisition-options-inline .acquisition-label {
   text-align: center;
+}
+
+.catalog-acquisition-options .acquisition-options-inline {
+  align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.catalog-acquisition-options .acquisition-options-inline .acquisition-option {
+  align-items: center;
+  flex: 1 1 110px;
+}
+
+.catalog-acquisition-options .acquisition-price {
+  min-width: 0;
+  width: 100%;
 }
 
 .acquisition-option {

@@ -2,6 +2,7 @@ import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
 
 const publicationTypes = new Set(["imagem", "video", "audio", "livro"]);
 const monetizationTypes = new Set(["gratuito", "aluguel", "compra"]);
+const emptyCatalogThumbnail = "/assets/catalogo_vazio.png";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,22 @@ function isThumbnailUrl(value: unknown, userId: string, publicationId: string) {
   }
 }
 
+async function readCatalog(token: string, projectId: string, catalogId: string) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/catalogo/${encodeURIComponent(catalogId)}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  const document = await response.json().catch(() => null) as {
+    fields?: Record<string, {
+      stringValue?: string;
+      arrayValue?: { values?: { stringValue?: string }[] };
+    }>;
+    updateTime?: string;
+    error?: { status?: string };
+  } | null;
+  return { response, document };
+}
+
 function validMonetizations(value: unknown): value is MonetizationRequest[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 3) return false;
   const types = new Set<string>();
@@ -80,7 +97,8 @@ function isValidContentRequest(value: unknown, userId: string): value is Content
     && hasExpectedFilePath(value.arquivo, archivePrefix)
     && typeof value.miniatura === "string" && isThumbnailUrl(value.miniatura, userId, publicationId)
     && Array.isArray(value.catalogos) && value.catalogos.length <= 50
-    && value.catalogos.every((catalogId) => typeof catalogId === "string" && catalogId.length <= 128)
+    && value.catalogos.every((catalogId) => typeof catalogId === "string" && catalogId.length > 0 && catalogId.length <= 128)
+    && new Set(value.catalogos).size === value.catalogos.length
     && validMonetizations(value.monetizacoes);
 }
 
@@ -128,6 +146,44 @@ export async function POST(request: Request) {
 
   const { publicationId } = body;
   const publicationName = `projects/${user.projectId}/databases/(default)/documents/publicacao/${publicationId}`;
+  let catalogSnapshots: Awaited<ReturnType<typeof readCatalog>>[];
+  try {
+    catalogSnapshots = await Promise.all(body.catalogos.map((catalogId) => readCatalog(user.idToken, user.projectId, catalogId)));
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
+
+  for (const catalogSnapshot of catalogSnapshots) {
+    if (catalogSnapshot.response.status === 404)
+      return Response.json({ error: "catalog-not-found" }, { status: 400 });
+    if (!catalogSnapshot.response.ok) {
+      console.error("Firestore catalog read failed", catalogSnapshot.document?.error?.status ?? catalogSnapshot.response.status);
+      return Response.json({ error: catalogSnapshot.response.status === 401 ? "unauthorized" : "catalog-read-failed" }, {
+        status: catalogSnapshot.response.status === 401 ? 401 : 500,
+      });
+    }
+    if (catalogSnapshot.document?.fields?.criador?.stringValue !== user.uid)
+      return Response.json({ error: "forbidden-catalog" }, { status: 403 });
+    if (!catalogSnapshot.document.updateTime)
+      return Response.json({ error: "catalog-read-failed" }, { status: 500 });
+  }
+
+  const catalogWrites = catalogSnapshots.map(({ document }, index) => {
+    const fields = document?.fields ?? {};
+    const publicationIds = fields.publicacoes?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+    const thumbnail = publicationIds.length === 0
+      ? body.miniatura || emptyCatalogThumbnail
+      : fields.miniatura?.stringValue || emptyCatalogThumbnail;
+    return {
+      update: {
+        name: `projects/${user.projectId}/databases/(default)/documents/catalogo/${body.catalogos[index]}`,
+        fields: firestoreFields({ publicacoes: [...publicationIds, publicationId], miniatura: thumbnail }),
+      },
+      updateMask: { fieldPaths: ["publicacoes", "miniatura"] },
+      currentDocument: { updateTime: document?.updateTime },
+    };
+  });
+
   const publicationResult = await writeFirestore(user.idToken, user.projectId, [{
     update: {
       name: publicationName,
@@ -145,7 +201,7 @@ export async function POST(request: Request) {
     },
     updateTransforms: [{ fieldPath: "data_criacao", setToServerValue: "REQUEST_TIME" }],
     currentDocument: { exists: false },
-  }]);
+  }, ...catalogWrites]);
 
   if (!publicationResult.response.ok) {
     console.error("Firestore publication write failed", publicationResult.error?.status ?? publicationResult.response.status);

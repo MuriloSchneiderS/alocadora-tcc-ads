@@ -1,15 +1,17 @@
 'use client';
 
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
 import UploadZone from "../components/UploadZone";
-import { storage } from "../../lib/firebase";
+import { db, storage } from "../../lib/firebase";
 import { createAutomaticThumbnail, transcodePublicationFile } from "../../lib/transcode";
 import { useAuth } from "../providers";
 
 const modelosMonetizacao = ["Gratuito com anúncios", "Aluguel", "Compra avulsa"];
+type CatalogOption = { id: string; titulo: string };
 const formatosArquivo = {
   "video/mp4": [".mp4"],
   "video/webm": [".webm"],
@@ -121,6 +123,8 @@ export default function Publicacao() {
     { modelo: "Gratuito com anúncios", preco: "" },
   ]);
   const [catalogos, setCatalogos] = useState([""]);
+  const [catalogosDisponiveis, setCatalogosDisponiveis] = useState<CatalogOption[]>([]);
+  const [carregandoCatalogos, setCarregandoCatalogos] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [miniatura, setMiniatura] = useState<File | null>(null);
   const [titulo, setTitulo] = useState("");
@@ -136,6 +140,30 @@ export default function Publicacao() {
     if (!isAuthLoading && !user)
       router.replace("/login");
   }, [isAuthLoading, router, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.uid;
+    let isCurrent = true;
+
+    async function carregarCatalogos() {
+      setCarregandoCatalogos(true);
+      try {
+        const snapshots = await getDocs(query(collection(db, "catalogo"), where("criador", "==", uid)));
+        if (isCurrent) setCatalogosDisponiveis(snapshots.docs.map((snapshot) => ({
+          id: snapshot.id,
+          titulo: String(snapshot.data().titulo ?? "Sem título"),
+        })));
+      } catch {
+        if (isCurrent) setCatalogosDisponiveis([]);
+      } finally {
+        if (isCurrent) setCarregandoCatalogos(false);
+      }
+    }
+
+    void carregarCatalogos();
+    return () => { isCurrent = false; };
+  }, [user]);
 
   //Função para atualizar o modelo ou preço de uma monetização
   function atualizarMonetizacao(index: number, campo: "modelo" | "preco", valor: string) {
@@ -270,6 +298,10 @@ export default function Publicacao() {
           throw new Error("As variáveis NEXT_PUBLIC_FIREBASE_API_KEY e NEXT_PUBLIC_FIREBASE_PROJECT_ID precisam estar configuradas no servidor.");
         if (responseBody?.error === "firebase-unavailable")
           throw new Error("Não foi possível conectar aos serviços Firebase. Os arquivos foram enviados, mas os metadados não puderam ser salvos.");
+        if (responseBody?.error === "forbidden-catalog")
+          throw new Error("Só é possível incluir a publicação em catálogos próprios.");
+        if (responseBody?.error === "catalog-not-found")
+          throw new Error("Um catálogo selecionado não existe mais. Atualize a página e tente novamente.");
         if (response.status === 403)
           throw new Error("O Firebase negou a gravação no Firestore. Verifique as regras de segurança e tente novamente.");
         throw new Error("Não foi possível salvar a publicação.");
@@ -335,7 +367,12 @@ export default function Publicacao() {
                       value={catalogo}
                       onChange={(event) => setCatalogos((atuais) => atuais.map((atual, atualIndex) => atualIndex === index ? event.target.value : atual))}
                     >
-                      <option value="">Selecionar</option>
+                      <option value="">{carregandoCatalogos ? "Carregando catálogos..." : "Selecionar catálogo"}</option>
+                      {catalogosDisponiveis.map((opcao) => (
+                        <option key={opcao.id} value={opcao.id} disabled={catalogos.some((selecionado, selecionadoIndex) => selecionadoIndex !== index && selecionado === opcao.id)}>
+                          {opcao.titulo}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="text-center text-sm">
@@ -361,9 +398,10 @@ export default function Publicacao() {
             <button
               type="button"
               className="w-full bg-panel-muted py-2 text-xs hover:bg-gold hover:text-navy"
+              disabled={carregandoCatalogos || catalogosDisponiveis.length === 0 || catalogos.filter(Boolean).length >= catalogosDisponiveis.length}
               onClick={() => setCatalogos((atuais) => [...atuais, ""])}
             >
-              Adicionar catálogo
+              {catalogosDisponiveis.length === 0 && !carregandoCatalogos ? "Você ainda não tem catálogos" : "Adicionar catálogo"}
             </button>
           </div>
           <div className="space-y-2 md:col-span-2">

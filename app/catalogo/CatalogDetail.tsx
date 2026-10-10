@@ -1,0 +1,386 @@
+'use client';
+
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import { db } from "../../lib/firebase";
+import Header from "../components/Header";
+import AcquisitionOptions from "../components/AcquisitionOptions";
+import ChannelInfo from "../components/ChannelInfo";
+import MediaCard from "../components/MediaCard";
+import { useAuth } from "../providers";
+import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
+
+type Publication = {
+  id: string;
+  titulo: string;
+  descricao: string;
+  miniatura: string;
+  duracao: number;
+};
+
+type Monetization = { tipo: string; preco: number; duracao?: number };
+
+type Catalog = {
+  id: string;
+  titulo: string;
+  descricao: string;
+  miniatura: string;
+  criador: string;
+  publicacoes: string[];
+  monetizacoes: Monetization[];
+};
+
+type LoadedCatalog = {
+  catalogId: string;
+  catalog?: Catalog;
+  items: Publication[];
+  available: Publication[];
+  creatorName: string;
+  creatorTitle?: string;
+  creatorAvatar?: string;
+  error?: string;
+};
+
+const emptyThumbnail = "/assets/catalogo_vazio.png";
+
+function toPublication(id: string, data: Record<string, unknown>): Publication {
+  return {
+    id,
+    titulo: String(data.titulo ?? "Sem título"),
+    descricao: String(data.descricao ?? ""),
+    miniatura: String(data.miniatura || emptyThumbnail),
+    duracao: Number(data.duracao ?? 0),
+  };
+}
+
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainder = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
+    : `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function toAcquisitionOption(item: Monetization) {
+  if (item.tipo === "gratuito") return { label: "Acesso gratuito", price: "Grátis" };
+  const price = `R$${(item.preco / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  if (item.tipo === "aluguel" && item.duracao === 7) return { label: "Alugue por 7 dias", price };
+  if (item.tipo === "assinatura" && item.duracao === 30) return { label: "Assine por 30 dias", price };
+  if (item.tipo === "compra") return { label: "Compre", price };
+  return { label: "Acesse", price };
+}
+
+export default function CatalogDetail({ catalogId }: { catalogId: string }) {
+  const { user, isLoading } = useAuth();
+  const [loaded, setLoaded] = useState<LoadedCatalog | null>(null);
+  const [selectedPublication, setSelectedPublication] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState(false);
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const draggingId = useRef<string | null>(null);
+  const originalOrder = useRef<Publication[] | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadCatalog() {
+      try {
+        const snapshot = await getDoc(doc(db, "catalogo", catalogId));
+        if (!snapshot.exists()) {
+          if (isCurrent) setLoaded({ catalogId, items: [], available: [], creatorName: "", error: "Catálogo não encontrado." });
+          return;
+        }
+
+        const data = snapshot.data();
+        const ids = Array.isArray(data.publicacoes) ? data.publicacoes as string[] : [];
+        const [itemSnapshots, monetizationSnapshots, ownerSnapshot, ownPublicationSnapshots] = await Promise.all([
+          Promise.all(ids.map((id) => getDoc(doc(db, "publicacao", id)))),
+          getDocs(collection(db, "catalogo", catalogId, "monetizacao")),
+          getDoc(doc(db, "usuario", String(data.criador ?? ""))),
+          user ? getDocs(query(collection(db, "publicacao"), where("criador", "==", user.uid))) : Promise.resolve(null),
+        ]);
+        const items = itemSnapshots.flatMap((item) => item.exists() ? [toPublication(item.id, item.data())] : []);
+        const monetizacoes = monetizationSnapshots.docs.map((item) => item.data() as Monetization);
+        const catalog: Catalog = {
+          id: snapshot.id,
+          titulo: String(data.titulo ?? "Sem título"),
+          descricao: String(data.descricao ?? ""),
+          miniatura: String(data.miniatura || emptyThumbnail),
+          criador: String(data.criador ?? ""),
+          publicacoes: ids,
+          monetizacoes,
+        };
+        const available = ownPublicationSnapshots?.docs
+          .filter((item) => !ids.includes(item.id))
+          .map((item) => toPublication(item.id, item.data())) ?? [];
+        const ownerProfile = ownerSnapshot.data();
+        const creatorName = String(ownerProfile?.nome ?? "Criador");
+        const creatorTitle = String(ownerProfile?.titulo || DEFAULT_CHANNEL_TITLE);
+        const creatorAvatar = String(ownerProfile?.avatar || DEFAULT_USER_AVATAR);
+
+        if (isCurrent) setLoaded({ catalogId, catalog, items, available, creatorName, creatorTitle, creatorAvatar });
+      } catch {
+        if (isCurrent) setLoaded({ catalogId, items: [], available: [], creatorName: "", error: "Não foi possível carregar este catálogo." });
+      }
+    }
+
+    void loadCatalog();
+    return () => { isCurrent = false; };
+  }, [catalogId, user]);
+
+  async function addPublication() {
+    if (!user || !loaded?.catalog || !selectedPublication || saving) return;
+    const publication = loaded.available.find((item) => item.id === selectedPublication);
+    if (!publication) return;
+
+    setSaving(true);
+    setError(false);
+    setMessage("Adicionando publicação...");
+    try {
+      const response = await fetch("/api/catalogo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ catalogId, publicationId: publication.id }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        if (response.status === 403) throw new Error("Só é possível adicionar publicações próprias a um catálogo próprio.");
+        if (result?.error === "already-added") throw new Error("Essa publicação já está no catálogo.");
+        if (result?.error === "content-not-found") throw new Error("O catálogo ou a publicação não foi encontrado.");
+        throw new Error("Não foi possível adicionar a publicação.");
+      }
+
+      setLoaded((current) => current?.catalogId !== catalogId || !current.catalog ? current : {
+        ...current,
+        catalog: {
+          ...current.catalog,
+          publicacoes: [...current.catalog.publicacoes, publication.id],
+          miniatura: current.catalog.publicacoes.length === 0 ? publication.miniatura : current.catalog.miniatura,
+        },
+        items: [...current.items, publication],
+        available: current.available.filter((item) => item.id !== publication.id),
+      });
+      setSelectedPublication("");
+      setMessage("Publicação adicionada ao catálogo.");
+    } catch (caught) {
+      setError(true);
+      setMessage(caught instanceof Error ? caught.message : "Não foi possível adicionar a publicação.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removePublication(publication: Publication) {
+    if (!user || !loaded?.catalog || loaded.catalog.criador !== user.uid || saving) return;
+    if (!window.confirm(`Remover "${publication.titulo}" deste catálogo? A publicação continuará no seu canal.`)) return;
+
+    setSaving(true);
+    setError(false);
+    setMessage("Removendo publicação do catálogo...");
+    try {
+      const response = await fetch("/api/catalogo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ catalogId, publicationId: publication.id, action: "remove" }),
+      });
+      if (!response.ok) {
+        if (response.status === 403) throw new Error("Só o proprietário pode remover publicações deste catálogo.");
+        throw new Error("Não foi possível remover a publicação do catálogo.");
+      }
+
+      setLoaded((current) => {
+        if (current?.catalogId !== catalogId || !current.catalog) return current;
+        const items = current.items.filter((item) => item.id !== publication.id);
+        return {
+          ...current,
+          catalog: {
+            ...current.catalog,
+            publicacoes: current.catalog.publicacoes.filter((id) => id !== publication.id),
+            miniatura: items[0]?.miniatura || emptyThumbnail,
+          },
+          items,
+          available: [...current.available, publication],
+        };
+      });
+      setMessage("Publicação removida do catálogo.");
+    } catch (caught) {
+      setError(true);
+      setMessage(caught instanceof Error ? caught.message : "Não foi possível remover a publicação do catálogo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startReordering(publicationId: string) {
+    if (!isOwner || saving || !loaded || loaded.catalogId !== catalogId) return;
+    draggingId.current = publicationId;
+    originalOrder.current = loaded.items.slice();
+    setReorderingId(publicationId);
+    setMessage("Arraste para escolher a nova posição.");
+  }
+
+  function moveReordering(clientX: number, clientY: number) {
+    const movingId = draggingId.current;
+    if (!movingId) return;
+    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-publication-id]");
+    const targetId = target?.dataset.publicationId;
+    if (!targetId || targetId === movingId) return;
+
+    const targetBounds = target.getBoundingClientRect();
+    const placeAfterTarget = clientY >= targetBounds.top + targetBounds.height / 2;
+    setLoaded((current) => {
+      if (current?.catalogId !== catalogId || !current.catalog) return current;
+      const items = current.items.slice();
+      const sourceIndex = items.findIndex((item) => item.id === movingId);
+      const targetIndex = items.findIndex((item) => item.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+
+      const [movingItem] = items.splice(sourceIndex, 1);
+      let insertionIndex = targetIndex + (placeAfterTarget ? 1 : 0);
+      if (sourceIndex < insertionIndex) insertionIndex -= 1;
+      items.splice(insertionIndex, 0, movingItem);
+      if (items.every((item, index) => item.id === current.items[index]?.id)) return current;
+
+      return {
+        ...current,
+        items,
+        catalog: {
+          ...current.catalog,
+          publicacoes: items.map((item) => item.id),
+          miniatura: items[0]?.miniatura || emptyThumbnail,
+        },
+      };
+    });
+  }
+
+  async function finishReordering() {
+    const movingId = draggingId.current;
+    draggingId.current = null;
+    setReorderingId(null);
+    if (!movingId || !user || !loaded?.catalog || loaded.catalogId !== catalogId) return;
+
+    const publicationIds = loaded.items.map((item) => item.id);
+    const previousItems = originalOrder.current;
+    originalOrder.current = null;
+    if (previousItems?.every((item, index) => item.id === publicationIds[index])) {
+      setMessage("");
+      return;
+    }
+
+    setSaving(true);
+    setError(false);
+    try {
+      const response = await fetch("/api/catalogo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ catalogId, action: "reorder", publicationIds }),
+      });
+      if (!response.ok) throw new Error("Não foi possível salvar a nova sequência.");
+      setMessage("Sequência atualizada.");
+    } catch (caught) {
+      if (previousItems) {
+        setLoaded((current) => current?.catalogId !== catalogId || !current.catalog ? current : {
+          ...current,
+          items: previousItems,
+          catalog: {
+            ...current.catalog,
+            publicacoes: previousItems.map((item) => item.id),
+            miniatura: previousItems[0]?.miniatura || emptyThumbnail,
+          },
+        });
+      }
+      setError(true);
+      setMessage(caught instanceof Error ? caught.message : "Não foi possível salvar a nova sequência.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const catalog = loaded?.catalogId === catalogId ? loaded.catalog : undefined;
+  const items = loaded?.catalogId === catalogId ? loaded.items : [];
+  const available = loaded?.catalogId === catalogId ? loaded.available : [];
+  const isOwner = Boolean(user && catalog?.criador === user.uid);
+  const thumbnail = items[0]?.miniatura || catalog?.miniatura || emptyThumbnail;
+
+  return (
+    <div className="min-h-screen bg-ink text-cream">
+      <Header />
+      <main className="mx-auto grid max-w-[1800px] gap-4 px-3 py-4 lg:grid-cols-[1fr_1fr] sm:px-5">
+        <section className="min-w-0 space-y-3" aria-label="Publicações do catálogo">
+          {items.map((publication) => <MediaCard
+            key={publication.id}
+            title={publication.titulo}
+            image={publication.miniatura}
+            meta={publication.descricao}
+            duration={formatDuration(publication.duracao)}
+            variant="row"
+            manageMenu={isOwner}
+            onRemove={() => void removePublication(publication)}
+            reorderId={isOwner ? publication.id : undefined}
+            isReordering={reorderingId === publication.id}
+            onReorderStart={() => startReordering(publication.id)}
+            onReorderMove={moveReordering}
+            onReorderEnd={() => void finishReordering()}
+          />)}
+          {catalog && items.length === 0 && <p className="border-b border-white/10 py-8 text-center text-sm text-cream/70">Este catálogo ainda não tem publicações.</p>}
+          {!catalog && !loaded?.error && <p className="py-12 text-center text-sm text-cream/70">{isLoading ? "Verificando sessão..." : "Carregando catálogo..."}</p>}
+          {loaded?.error && <p className="py-12 text-center text-sm text-red" role="alert">{loaded.error}</p>}
+          {catalog && isOwner && <section className="border-t border-white/15 pt-4" aria-label="Adicionar publicação">
+            <h2 className="mb-2 text-sm font-bold text-white">Adicionar publicação</h2>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select className="min-w-0 flex-1 bg-panel-muted px-3 py-2 text-sm text-white" value={selectedPublication} onChange={(event) => setSelectedPublication(event.target.value)} disabled={saving}>
+                <option value="">Selecionar publicação própria</option>
+                {available.map((publication) => <option key={publication.id} value={publication.id}>{publication.titulo}</option>)}
+              </select>
+              <button type="button" disabled={!selectedPublication || saving} onClick={() => void addPublication()} className="bg-panel-muted px-4 py-2 text-sm font-semibold text-white hover:bg-gold hover:text-navy disabled:cursor-not-allowed disabled:opacity-50">
+                {saving ? "ADICIONANDO..." : "ADICIONAR"}
+              </button>
+            </div>
+            {available.length === 0 && <p className="mt-2 text-xs text-cream/70">Todas as suas publicações já estão no catálogo ou você ainda não publicou conteúdo.</p>}
+            <p className={`mt-2 text-xs ${error ? "text-red" : "text-cream/75"}`} role={error ? "alert" : "status"} aria-live="polite">{message}</p>
+          </section>}
+        </section>
+
+        {catalog && <aside className="flex flex-col gap-6 border border-white/10 bg-panel p-3 sm:p-5">
+          <div className="grid gap-5 sm:grid-cols-[minmax(150px,220px)_1fr]">
+            <div>
+              <div className="aspect-[3/4] overflow-hidden bg-panel-muted">
+                <img src={thumbnail} alt={`Miniatura do catálogo ${catalog.titulo}`} className="h-full w-full object-cover" />
+              </div>
+              <p className="bg-ink py-1 text-center text-sm">{catalog.publicacoes.length} itens</p>
+            </div>
+            <div className="min-w-0 text-right text-sm leading-relaxed text-cream/85">
+              <h1 className="mb-3 text-xl text-white">{catalog.titulo}</h1>
+              <p className="whitespace-pre-line">{catalog.descricao}</p>
+              <ChannelInfo
+                channelId={catalog.criador}
+                name={loaded?.creatorName || "Criador"}
+                title={loaded?.creatorTitle}
+                avatar={loaded?.creatorAvatar || DEFAULT_USER_AVATAR}
+                className="mt-5 justify-end"
+              />
+            </div>
+          </div>
+          <div className="border-t border-white/10 pt-4">
+            <div className="catalog-acquisition-options">
+              <AcquisitionOptions direction="inline" options={catalog.monetizacoes.map(toAcquisitionOption)} />
+            </div>
+          </div>
+        </aside>}
+      </main>
+    </div>
+  );
+}

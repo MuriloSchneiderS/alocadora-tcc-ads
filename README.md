@@ -23,9 +23,8 @@ Protótipo de estrutura:
         - criador (usuarioId)
         - publicacoes (array de publicacaoId e posicao no catalogo)
     catalogo/{catalogoId}/monetizacao/{monetizacaoId} (catalogo pode ter várias monetizações, como aluguel, assinatura e compra)
-        - tipo (enum: aluguel, compra, assinatura, gratuito)
+        - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
         - preco (number)
-        - duracao (number inteiro, em dias para aluguel ou assinatura)
         - ativo (boolean)
     publicacao/{publicacaoId}
         - titulo (string)
@@ -39,9 +38,8 @@ Protótipo de estrutura:
         - catalogos (array de catalogoId e posicao no catalogo) (catalogos em que está)
         - criador (usuarioId)
     publicacao/{publicacaoId}/monetizacao/{monetizacaoId} (publicacao pode ter várias monetizações, como gratuito, aluguel e compra)
-        - tipo (enum: aluguel, compra, assinatura, gratuito)
+        - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
         - preco (number)
-        - duracao (number inteiro, em dias quando configurada para aluguel)
         - ativo (boolean)
     acesso/{usuarioId}/publicacoes/{publicacaoId}
         - usuario (usuarioId)
@@ -80,4 +78,5 @@ Protótipo de estrutura:
 
     Nenhuma credencial Firebase Admin/service account é necessária para login, consulta de sessão ou publicação. Os endpoints usam `NEXT_PUBLIC_FIREBASE_API_KEY` e `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, já fornecidos pela configuração Firebase do cliente; o token do usuário e as regras do Firestore controlam a autorização.
 
-    Para futuras APIs de perfil e edição de publicação, reutilize `authenticateFirebaseRequest`, derive o proprietário de `user.uid` e mantenha validação de campos e regras de propriedade no Firestore. Não aceite `uid` do cliente como prova de identidade. As regras atuais negam escrita em `acesso` e `transacao`; essas gravações devem ficar num backend privilegiado, por exemplo uma Cloud Function/webhook Stripe que valide a confirmação do pagamento. Isso exigirá uma identidade de serviço adequada ao ambiente de deploy, mas não exige usar gcloud no desenvolvimento do cliente.
+    APIs de perfil e edição de publicação utilizam `authenticateFirebaseRequest`, deriva o proprietário de `user.uid` e mantem validação de campos e regras de propriedade no Firestore. 
+    Não aceite `uid` do cliente como prova de identidade. As regras atuais negam escrita em `acesso` e `transacao`; essas gravações devem ficar num backend privilegiado, por exemplo uma Cloud Function/webhook Stripe que valide a confirmação do pagamento. Isso exigirá uma identidade de serviço adequada ao ambiente de deploy, mas não exige usar gcloud no desenvolvimento do cliente.

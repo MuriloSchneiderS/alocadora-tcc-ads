@@ -51,6 +51,16 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    match /usuarios/{userId}/avatar.webp {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size > 0
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+      allow delete: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
