@@ -65,7 +65,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'nome', 'titulo', 'descricao', 'avatar'
         ]);
-      allow delete: if false;
+        allow delete: if false;
     }
 
     match /catalogo/{catalogId} {
@@ -90,7 +90,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'titulo', 'descricao', 'miniatura', 'publicacoes'
         ]);
-      allow delete: if false;
+      allow delete: if signedIn() && resource.data.criador == request.auth.uid;
 
       match /monetizacao/{monetizationId} {
         allow read: if true;
@@ -113,7 +113,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'titulo', 'descricao', 'tamanho', 'duracao', 'miniatura', 'arquivo', 'catalogos'
         ]);
-      allow delete: if false;
+        allow delete: if signedIn() && resource.data.criador == request.auth.uid;
 
       match /monetizacao/{monetizationId} {
         allow read: if true;

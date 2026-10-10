@@ -1,16 +1,21 @@
 'use client';
 
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Header from "../components/Header";
+import MonetizationEditor, { formatToCents, toCents, type MonetizationDraft, type MonetizationModel } from "../components/MonetizationEditor";
 import UploadZone from "../components/UploadZone";
 import { db, storage } from "../../lib/firebase";
 import { createAutomaticThumbnail, transcodePublicationFile } from "../../lib/transcode";
 import { useAuth } from "../providers";
 
-const modelosMonetizacao = ["Gratuito com anúncios", "Aluguel", "Compra avulsa"];
+const modelosMonetizacao: MonetizationModel[] = [
+  { label: "Gratuito com anúncios", type: "gratuito", free: true },
+  { label: "Aluguel", type: "aluguel" },
+  { label: "Compra avulsa", type: "compra" },
+];
 type CatalogOption = { id: string; titulo: string };
 const formatosArquivo = {
   "video/mp4": [".mp4"],
@@ -39,27 +44,6 @@ Vídeos: reduz para no máximo 854×480, sem ampliar vídeos menores, preservand
 GIFs: tenta converter para WebP animado, com dimensão máxima de 1280 px e qualidade 45. Mantém o GIF original se a conversão falhar ou gerar um arquivo maior.
 Imagens estáticas: não passam pelo FFmpeg. O navegador usa Canvas para gerar WebP com até 1280 px e qualidade 0,48; só usa o resultado se ele for menor que o original.
 PDF e EPUB: permanecem sem conversão.*/
-
-//R$reais e centavos no campo de input de monetização, apenas centavos no firestore
-function formatarReaisCentavos(valor: string, completarCentavos = false) {
-  const limpo = valor.replace(/[^\d,]/g, "");
-  if (!limpo) return "";
-
-  const separador = limpo.indexOf(",");
-  const reais = (separador < 0 ? limpo : limpo.slice(0, separador))
-    .replace(/^0+(?=\d)/, "")
-    .slice(0, 13);
-  const centavos = separador < 0 ? "" : limpo.slice(separador + 1).replace(/,/g, "").slice(0, 2);
-  const reaisFormatados = reais.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-
-  if (separador < 0 && !completarCentavos) return reaisFormatados;
-  const centavosFormatados = completarCentavos ? centavos.padEnd(2, "0") : centavos;
-  return `${reaisFormatados || "0"},${centavosFormatados}`;
-}
-function converterParaCentavos(valor: string) {
-  const [reais = "0", centavos = ""] = valor.replace(/\./g, "").split(",", 2);
-  return Number(reais || "0") * 100 + Number(centavos.padEnd(2, "0").slice(0, 2));
-}
 
 //Determina o tipo de publicação com base no arquivo enviado
 function getPublicationType(file: File) {
@@ -91,12 +75,12 @@ function hasAutomaticThumbnail(file: File) {
 }
 
 //Envia o arquivo da publicação ao Storage, com suporte a progresso e cancelamento
-async function uploadPublicationFile(userId: string, publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void) {
+async function uploadPublicationFile(userId: string, publicationId: string, file: File, kind: "archive" | "thumbnail", onProgress: (progress: number) => void, revisionId?: string) {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   //Define o caminho do arquivo no Storage com base no tipo (arquivo ou miniatura)
   const path = kind === "archive"
-    ? `publicacoes/arquivos/${userId}/${publicationId}/arquivo.${extension}`
-    : `publicacoes/miniaturas/${userId}/${publicationId}/miniatura.${extension}`;
+    ? `publicacoes/arquivos/${userId}/${publicationId}/arquivo${revisionId ? `-${revisionId}` : ""}.${extension}`
+    : `publicacoes/miniaturas/${userId}/${publicationId}/miniatura${revisionId ? `-${revisionId}` : ""}.${extension}`;
   const fileRef = ref(storage, path);//Referência do arquivo no Storage
 
   try {
@@ -116,11 +100,28 @@ async function uploadPublicationFile(userId: string, publicationId: string, file
   }
 }
 
+type ExistingPublication = {
+  arquivo: string;
+  miniatura: string;
+  tipo: string;
+  tamanho: number;
+  duracao: number;
+};
+
+function storagePathFromUrl(url: string) {
+  try {
+    const match = new URL(url).pathname.match(/\/o\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : "";
+  } catch {
+    return "";
+  }
+}
+
 export default function Publicacao() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [monetizacoes, setMonetizacoes] = useState([//Estado para armazenar as monetizações da publicação
-    { modelo: "Gratuito com anúncios", preco: "" },
+  const [monetizacoes, setMonetizacoes] = useState<MonetizationDraft[]>([
+    { model: "Gratuito com anúncios", price: "" },
   ]);
   const [catalogos, setCatalogos] = useState([""]);
   const [catalogosDisponiveis, setCatalogosDisponiveis] = useState<CatalogOption[]>([]);
@@ -135,6 +136,9 @@ export default function Publicacao() {
   const [confirmarMiniatura, setConfirmarMiniatura] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [etapa, setEtapa] = useState("");
+  const [editingId, setEditingId] = useState("");
+  const [existingPublication, setExistingPublication] = useState<ExistingPublication | null>(null);
+  const [editReady, setEditReady] = useState(true);
 
   useEffect(() => {
     if (!isAuthLoading && !user)
@@ -165,27 +169,62 @@ export default function Publicacao() {
     return () => { isCurrent = false; };
   }, [user]);
 
-  //Função para atualizar o modelo ou preço de uma monetização
-  function atualizarMonetizacao(index: number, campo: "modelo" | "preco", valor: string) {
-    setMonetizacoes((atuais) => {
-      //Evita que dois modelos iguais sejam selecionados
-      if (campo === "modelo" && atuais.some((monetizacao, atualIndex) => atualIndex !== index && monetizacao.modelo === valor)) {
-        return atuais;
-      }
+  useEffect(() => {
+    if (!user) return;
+    const publicationId = new URLSearchParams(window.location.search).get("edit");
+    if (!publicationId) return;
+    const editPublicationId = publicationId;
+    const uid = user.uid;
+    let isCurrent = true;
 
-      //Atualiza o campo especificado da monetização no índice fornecido
-      return atuais.map((monetizacao, atualIndex) =>
-        atualIndex === index
-          ? { ...monetizacao, [campo]: campo === "preco" ? formatarReaisCentavos(valor) : valor }
-          : monetizacao,
-      );
-    });
-  }
+    async function loadPublicationForEdit() {
+      try {
+        const snapshot = await getDoc(doc(db, "publicacao", editPublicationId));
+        if (!snapshot.exists()) throw new Error("Publicação não encontrada.");
+        const data = snapshot.data();
+        if (data.criador !== uid) throw new Error("Somente o criador pode editar esta publicação.");
+        const monetizationSnapshots = await getDocs(collection(db, "publicacao", editPublicationId, "monetizacao"));
+        const loadedMonetizations = monetizationSnapshots.docs.flatMap((item) => {
+          const monetization = item.data();
+          const model = modelosMonetizacao.find((option) => option.type === monetization.tipo);
+          if (!model) return [];
+          const price = Number(monetization.preco ?? 0);
+          return [{
+            model: model.label,
+            price: model.free ? "" : formatToCents(`${Math.floor(price / 100)},${String(price % 100).padStart(2, "0")}`, true),
+          }];
+        });
+        if (!isCurrent) return;
+        setEditingId(editPublicationId);
+        setTitulo(String(data.titulo ?? ""));
+        setDescricao(String(data.descricao ?? ""));
+        setCatalogos(Array.isArray(data.catalogos) && data.catalogos.length > 0 ? data.catalogos : [""]);
+        setMonetizacoes(loadedMonetizations.length > 0 ? loadedMonetizations : [{ model: "Gratuito com anúncios", price: "" }]);
+        setExistingPublication({
+          arquivo: String(data.arquivo ?? ""),
+          miniatura: String(data.miniatura ?? ""),
+          tipo: String(data.tipo ?? "livro"),
+          tamanho: Number(data.tamanho ?? 0),
+          duracao: Number(data.duracao ?? 0),
+        });
+      } catch (caught) {
+        if (isCurrent) {
+          setErro(true);
+          setMensagem(caught instanceof Error ? caught.message : "Não foi possível carregar a publicação.");
+        }
+      } finally {
+        if (isCurrent) setEditReady(true);
+      }
+    }
+
+    void loadPublicationForEdit();
+    return () => { isCurrent = false; };
+  }, [user]);
 
   async function publicar(usarMiniaturaAutomatica = false) {
     if (publicando) return;
-    //Arquivo e titulo obrigatórios
-    if (!arquivo) {
+    const editing = Boolean(editingId && existingPublication);
+    if (!editing && !arquivo) {
       setErro(true);
       setMensagem("Selecione o arquivo da publicação.");
       return;
@@ -196,14 +235,13 @@ export default function Publicacao() {
       return;
     }
     
-    if (monetizacoes.some((item) => item.modelo !== "Gratuito com anúncios" && converterParaCentavos(item.preco) <= 0)) {
+    if (monetizacoes.some((item) => item.model !== "Gratuito com anúncios" && toCents(item.price) <= 0)) {
       setErro(true);
       setMensagem("Informe um preço maior que zero para cada opção paga.");
       return;
     }
 
-    //Verifica se o arquivo exige miniatura personalizada e se não foi enviada
-    if (!miniatura && !usarMiniaturaAutomatica) {
+    if (!editing && arquivo && !miniatura && !usarMiniaturaAutomatica) {
       if (!hasAutomaticThumbnail(arquivo)) {
         setErro(true);
         setMensagem("Este formato exige uma miniatura personalizada. Envie uma imagem para continuar.");
@@ -228,48 +266,56 @@ export default function Publicacao() {
     try {
       const usuario = user;
       if (!usuario) throw new Error("Sua sessão expirou. Entre novamente.");
+      const publicationId = editingId || crypto.randomUUID();
+      const revisionId = editing ? crypto.randomUUID() : undefined;
+      let archivePath = existingPublication?.arquivo ?? "";
+      let miniaturaUrl = existingPublication?.miniatura ?? "";
+      let tipo = existingPublication?.tipo ?? "livro";
+      let tamanho = existingPublication?.tamanho ?? 0;
+      let duracao = existingPublication?.duracao ?? 0;
 
-      setEtapa("Convertendo arquivo principal...");
-      const resultado = await transcodePublicationFile(arquivo, (percentual) => {
-        setProgresso(Math.round(percentual * 45));
-      });
-      const tipo = getPublicationType(resultado.file);
+      if (arquivo) {
+        setEtapa("Convertendo arquivo principal...");
+        const resultado = await transcodePublicationFile(arquivo, (percentual) => {
+          setProgresso(Math.round(percentual * 35));
+        });
+        tipo = getPublicationType(resultado.file);
+        tamanho = resultado.file.size;
+        duracao = resultado.duration;
+        setEtapa("Enviando arquivo principal...");
+        uploadedFile = await uploadPublicationFile(usuario.uid, publicationId, resultado.file, "archive", (percentual) => {
+          setProgresso(40 + Math.round(percentual * 40));
+        }, revisionId);
+        archivePath = uploadedFile.path;
+      }
+
       let miniaturaConvertida: File | null = null;
       if (miniatura) {
         setEtapa("Preparando miniatura selecionada...");
-        setProgresso(48);
-        //Se a miniatura for um vídeo, converte para WebP;
+        setProgresso(82);
         miniaturaConvertida = (await transcodePublicationFile(miniatura, (percentual) => {
-          setProgresso(48 + Math.round(percentual * 7));
+          setProgresso(82 + Math.round(percentual * 5));
         })).file;
-      } else {
+      } else if (!editing && arquivo) {
         setEtapa("Gerando miniatura automática...");
-        setProgresso(52);
+        setProgresso(88);
         miniaturaConvertida = await createAutomaticThumbnail(arquivo);
       }
 
-      const publicationId = crypto.randomUUID();
-
-      //Acompanhamento do progresso de upload do arquivo principal, 35% do progresso total, de 55% a 90%
-      setEtapa("Enviando arquivo principal...");
-      uploadedFile = await uploadPublicationFile(usuario.uid, publicationId, resultado.file, "archive", (percentual) => {
-        setProgresso(55 + Math.round(percentual * 35));
-      });
-
-      let miniaturaUrl = "";
       uploadedThumbnail = miniaturaConvertida
         ? await uploadPublicationFile(usuario.uid, publicationId, miniaturaConvertida, "thumbnail", (percentual) => {
           setEtapa("Enviando miniatura...");
-          setProgresso(90 + Math.round(percentual * 8));
-        })
+          setProgresso(88 + Math.round(percentual * 8));
+        }, revisionId)
         : null;
       if (uploadedThumbnail)
         miniaturaUrl = uploadedThumbnail.url;
+      if (!archivePath) throw new Error("O arquivo atual não foi encontrado. Envie o arquivo novamente.");
 
       setEtapa("Salvando publicação...");
       setProgresso(98);
       const response = await fetch("/api/content", {
-        method: "POST",
+        method: editing ? "PATCH" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${await usuario.getIdToken()}`,
@@ -279,15 +325,15 @@ export default function Publicacao() {
           titulo: titulo.trim(),
           descricao: descricao.trim(),
           tipo,
-          tamanho: resultado.file.size,
-          duracao: resultado.duration,
-          arquivo: uploadedFile.path,
+          tamanho,
+          duracao,
+          arquivo: archivePath,
           miniatura: miniaturaUrl,
           catalogos: catalogos.filter(Boolean),
-          monetizacoes: monetizacoes.map(({ modelo, preco }) => ({
-            tipo: modelo === "Gratuito com anúncios" ? "gratuito" : modelo === "Aluguel" ? "aluguel" : "compra",
-            preco: modelo === "Gratuito com anúncios" ? 0 : converterParaCentavos(preco),
-          })),
+          monetizacoes: monetizacoes.map(({ model, price }) => {
+            const selectedModel = modelosMonetizacao.find((option) => option.label === model);
+            return { tipo: selectedModel?.type ?? "gratuito", preco: selectedModel?.free ? 0 : toCents(price) };
+          }),
         }),
       });
       const responseBody = await response.json().catch(() => null) as { error?: string } | null;
@@ -302,15 +348,26 @@ export default function Publicacao() {
           throw new Error("Só é possível incluir a publicação em catálogos próprios.");
         if (responseBody?.error === "catalog-not-found")
           throw new Error("Um catálogo selecionado não existe mais. Atualize a página e tente novamente.");
+        if (responseBody?.error === "forbidden")
+          throw new Error("Somente o criador pode editar esta publicação.");
         if (response.status === 403)
           throw new Error("O Firebase negou a gravação no Firestore. Verifique as regras de segurança e tente novamente.");
         throw new Error("Não foi possível salvar a publicação.");
       }
       publicationSaved = true;
 
+      if (editing && existingPublication) {
+        if (uploadedFile && existingPublication.arquivo !== uploadedFile.path)
+          await deleteObject(ref(storage, existingPublication.arquivo)).catch(() => undefined);
+        if (uploadedThumbnail && existingPublication.miniatura) {
+          const oldThumbnailPath = storagePathFromUrl(existingPublication.miniatura);
+          if (oldThumbnailPath) await deleteObject(ref(storage, oldThumbnailPath)).catch(() => undefined);
+        }
+      }
+
       setProgresso(100);
-      setEtapa("Publicação concluída.");
-      setMensagem("Publicação enviada com sucesso.");
+      setEtapa(editing ? "Alterações concluídas." : "Publicação concluída.");
+      setMensagem(editing ? "Publicação atualizada com sucesso." : "Publicação enviada com sucesso.");
       router.push(`/canal/${usuario.uid}`);
     } catch (error) {//Em caso de erro, tenta excluir os arquivos enviados, exibe a mensagem de erro e libera os campos para nova tentativa
       if (!publicationSaved) {
@@ -323,6 +380,36 @@ export default function Publicacao() {
       setEtapa("O processo falhou. Seus campos foram liberados.");
       setMensagem(error instanceof Error ? error.message : "Não foi possível publicar o arquivo.");
     } finally {
+      setPublicando(false);
+    }
+  }
+
+  async function excluirPublicacao() {
+    if (!user || !editingId || !existingPublication || publicando) return;
+    if (!window.confirm(`Excluir permanentemente "${titulo}"? Esta ação não pode ser desfeita.`)) return;
+    setPublicando(true);
+    setErro(false);
+    setMensagem("Excluindo publicação...");
+    try {
+      const response = await fetch("/api/content", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ publicationId: editingId }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string; arquivo?: string; miniatura?: string } | null;
+      if (!response.ok) throw new Error(result?.error === "forbidden" ? "Somente o criador pode excluir esta publicação." : "Não foi possível excluir a publicação.");
+      const thumbnailPath = storagePathFromUrl(result?.miniatura ?? "");
+      await Promise.all([
+        result?.arquivo ? deleteObject(ref(storage, result.arquivo)).catch(() => undefined) : Promise.resolve(),
+        thumbnailPath ? deleteObject(ref(storage, thumbnailPath)).catch(() => undefined) : Promise.resolve(),
+      ]);
+      router.push(`/canal/${user.uid}`);
+    } catch (caught) {
+      setErro(true);
+      setMensagem(caught instanceof Error ? caught.message : "Não foi possível excluir a publicação.");
       setPublicando(false);
     }
   }
@@ -343,14 +430,19 @@ export default function Publicacao() {
     <div className="flex min-h-screen flex-col bg-ink text-cream">
       <Header showSearch={false} showPublish={false} />
       <main className="mx-auto flex w-full flex-1 flex-col justify-center max-w-3xl bg-panel p-2 sm:p-3">
-        <fieldset disabled={publicando} className="contents">
+        {!editReady && <p className="py-3 text-sm text-cream/70">Carregando publicação...</p>}
+        <fieldset disabled={publicando || !editReady} className="contents">
+        <h1 className="mb-2 border-b border-white/15 pb-2 text-xl font-bold text-white">{editingId ? "Editar publicação" : "Criar publicação"}</h1>
         {/*Área de upload do arquivo e miniatura e informações da publicação*/}
         <div className="grid gap-4 md:grid-cols-2">
-          <UploadZone className="h-full" formats="Vídeo, áudio, imagem e livro." accept={formatosArquivo} disabled={publicando} onFileAccepted={setArquivo} />
+          <div className="space-y-2">
+            {existingPublication && <p className="text-xs text-cream/75">Arquivo atual: {existingPublication.arquivo.split("/").pop()}</p>}
+            <UploadZone label={editingId ? "Substituir arquivo (opcional)" : undefined} className="h-full" formats="Vídeo, áudio, imagem e livro." accept={formatosArquivo} disabled={publicando} onFileAccepted={setArquivo} />
+          </div>
           <section className="space-y-1">
             <input className="w-full bg-panel-muted px-2 py-1 text-sm placeholder:text-cream" placeholder="Título..." value={titulo} required aria-required="true" onChange={(event) => setTitulo(event.target.value)} />
             <textarea className="h-16 w-full resize-none bg-panel-muted px-2 py-1 text-xs placeholder:text-cream" placeholder="Descrição..." value={descricao} onChange={(event) => setDescricao(event.target.value)} />
-            <p className="text-sm">Miniatura:</p>
+            <p className="text-sm">{existingPublication?.miniatura ? "Miniatura atual (opcional substituir):" : "Miniatura:"}</p>
             <UploadZone className="h-44" formats="Formatos aceitos: jpg, png, webp." accept={{ "image/jpeg": [".jpg", ".jpeg"], "image/png": [".png"], "image/webp": [".webp"] }} disabled={publicando} onFileAccepted={setMiniatura} />
           </section>
         </div>
@@ -405,73 +497,15 @@ export default function Publicacao() {
             </button>
           </div>
           <div className="space-y-2 md:col-span-2">
-            {monetizacoes.map((monetizacao, index) => (
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2" key={index}>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="text-center text-sm">
-                    <span className={index === 0 ? "" : "sr-only"}>Modelo de monetização:</span>
-                    <select
-                      className="mt-1 block h-8 w-full bg-panel-muted px-1 text-left text-xs"
-                      value={monetizacao.modelo}
-                      onChange={(event) => atualizarMonetizacao(index, "modelo", event.target.value)}
-                    >
-                      {modelosMonetizacao.map((modelo) => (
-                        <option
-                          key={modelo}
-                          value={modelo}
-                          disabled={monetizacoes.some((outra, outroIndex) => outroIndex !== index && outra.modelo === modelo)}
-                        >
-                          {modelo}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-center text-sm">
-                    <span className={index === 0 ? "" : "sr-only"}>Preço (R$):</span>
-                    <span className="mt-1 flex h-8 items-center bg-panel-muted px-2 text-xs focus-within:outline-1 focus-within:outline-gold">
-                      <span aria-hidden="true" className="mr-1 text-cream/70">R$</span>
-                      <input
-                        className="min-w-0 flex-1 bg-transparent outline-none disabled:cursor-not-allowed"
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        aria-label={`Preço em reais para ${monetizacao.modelo}`}
-                        value={monetizacao.preco}
-                        disabled={monetizacao.modelo === "Gratuito com anúncios"}
-                        onChange={(event) => atualizarMonetizacao(index, "preco", event.target.value)}
-                        onBlur={(event) => atualizarMonetizacao(index, "preco", formatarReaisCentavos(event.target.value, true))}
-                      />
-                    </span>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  className="h-8 bg-panel-muted px-2 text-xs hover:bg-red hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label={`Remover monetização ${monetizacao.modelo}`}
-                  disabled={monetizacoes.length <= 1}
-                  title={monetizacoes.length <= 1 ? "Mantenha ao menos uma opção de monetização" : undefined}
-                  onClick={() => setMonetizacoes((atuais) => atuais.filter((_, atualIndex) => atualIndex !== index))}
-                >
-                  Remover
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="w-full bg-panel-muted py-2 text-xs hover:bg-gold hover:text-navy disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={monetizacoes.length >= modelosMonetizacao.length}
-              onClick={() => setMonetizacoes((atuais) => {
-                const modeloLivre = modelosMonetizacao.find((modelo) => !atuais.some((monetizacao) => monetizacao.modelo === modelo));
-                return modeloLivre ? [...atuais, { modelo: modeloLivre, preco: "" }] : atuais;
-              })}
-            >
-              Adicionar monetização
-            </button>
+            <MonetizationEditor models={modelosMonetizacao} value={monetizacoes} onChange={setMonetizacoes} disabled={publicando} />
           </div>
         </div>
-        <button type="button" disabled={publicando} onClick={() => void publicar()} className="ml-auto mt-4 block bg-ink px-20 py-2 text-xs hover:bg-gold hover:text-navy disabled:cursor-wait disabled:opacity-60">
-          {publicando ? "PUBLICANDO..." : "PUBLICAR"}
-        </button>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {editingId && <button type="button" disabled={publicando} onClick={() => void excluirPublicacao()} className="bg-red px-8 py-2 text-xs text-white hover:bg-red/80 disabled:cursor-wait disabled:opacity-60">EXCLUIR PUBLICAÇÃO</button>}
+          <button type="button" disabled={publicando || !editReady} onClick={() => void publicar()} className="bg-ink px-20 py-2 text-xs hover:bg-gold hover:text-navy disabled:cursor-wait disabled:opacity-60">
+            {publicando ? "SALVANDO..." : editingId ? "SALVAR ALTERAÇÕES" : "PUBLICAR"}
+          </button>
+        </div>
         </fieldset>
         {publicando && (
           <section className="mt-4 space-y-2" aria-live="polite" aria-label="Progresso da publicação">

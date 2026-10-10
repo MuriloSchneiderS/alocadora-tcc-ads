@@ -1,7 +1,9 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { db } from "../../lib/firebase";
 import Header from "../components/Header";
 import AcquisitionOptions from "../components/AcquisitionOptions";
@@ -16,6 +18,7 @@ type Publication = {
   descricao: string;
   miniatura: string;
   duracao: number;
+  monetizacoes: { label: string; price: string }[];
 };
 
 type Monetization = { tipo: string; preco: number; duracao?: number };
@@ -43,13 +46,23 @@ type LoadedCatalog = {
 
 const emptyThumbnail = "/assets/catalogo_vazio.png";
 
-function toPublication(id: string, data: Record<string, unknown>): Publication {
+function toPublication(id: string, data: Record<string, unknown>, monetizacoes: Monetization[]): Publication {
+  const acquisitions = monetizacoes.map((item) => {
+    const price = item.preco === 0
+      ? "R$0"
+      : `R$${(item.preco / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+    if (item.tipo === "gratuito") return { label: "Acesso gratuito", price };
+    if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price };
+    return { label: "Download", price };
+  });
+
   return {
     id,
     titulo: String(data.titulo ?? "Sem título"),
     descricao: String(data.descricao ?? ""),
     miniatura: String(data.miniatura || emptyThumbnail),
     duracao: Number(data.duracao ?? 0),
+    monetizacoes: acquisitions,
   };
 }
 
@@ -74,6 +87,7 @@ function toAcquisitionOption(item: Monetization) {
 }
 
 export default function CatalogDetail({ catalogId }: { catalogId: string }) {
+  const router = useRouter();
   const { user, isLoading } = useAuth();
   const [loaded, setLoaded] = useState<LoadedCatalog | null>(null);
   const [selectedPublication, setSelectedPublication] = useState("");
@@ -81,6 +95,7 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [catalogMenuOpen, setCatalogMenuOpen] = useState(false);
   const draggingId = useRef<string | null>(null);
   const originalOrder = useRef<Publication[] | null>(null);
 
@@ -103,7 +118,12 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           getDoc(doc(db, "usuario", String(data.criador ?? ""))),
           user ? getDocs(query(collection(db, "publicacao"), where("criador", "==", user.uid))) : Promise.resolve(null),
         ]);
-        const items = itemSnapshots.flatMap((item) => item.exists() ? [toPublication(item.id, item.data())] : []);
+        const items = (await Promise.all(itemSnapshots.map(async (item) => {
+          if (!item.exists()) return null;
+          const monetizationSnapshots = await getDocs(collection(db, "publicacao", item.id, "monetizacao"));
+          const monetizacoes = monetizationSnapshots.docs.map((monetization) => monetization.data() as Monetization);
+          return toPublication(item.id, item.data(), monetizacoes);
+        }))).filter((item): item is Publication => item !== null);
         const monetizacoes = monetizationSnapshots.docs.map((item) => item.data() as Monetization);
         const catalog: Catalog = {
           id: snapshot.id,
@@ -114,9 +134,15 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           publicacoes: ids,
           monetizacoes,
         };
-        const available = ownPublicationSnapshots?.docs
-          .filter((item) => !ids.includes(item.id))
-          .map((item) => toPublication(item.id, item.data())) ?? [];
+        const available = ownPublicationSnapshots
+          ? await Promise.all(ownPublicationSnapshots.docs
+            .filter((item) => !ids.includes(item.id))
+            .map(async (item) => {
+              const monetizationSnapshots = await getDocs(collection(db, "publicacao", item.id, "monetizacao"));
+              const monetizacoes = monetizationSnapshots.docs.map((monetization) => monetization.data() as Monetization);
+              return toPublication(item.id, item.data(), monetizacoes);
+            }))
+          : [];
         const ownerProfile = ownerSnapshot.data();
         const creatorName = String(ownerProfile?.nome ?? "Criador");
         const creatorTitle = String(ownerProfile?.titulo || DEFAULT_CHANNEL_TITLE);
@@ -217,6 +243,30 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
       setError(true);
       setMessage(caught instanceof Error ? caught.message : "Não foi possível remover a publicação do catálogo.");
     } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteCatalog() {
+    if (!user || !loaded?.catalog || loaded.catalog.criador !== user.uid || saving) return;
+    if (!window.confirm(`Excluir permanentemente o catálogo "${loaded.catalog.titulo}"? As publicações continuarão no seu canal.`)) return;
+    setSaving(true);
+    setError(false);
+    setMessage("Excluindo catálogo...");
+    try {
+      const response = await fetch("/api/catalogo", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ catalogId }),
+      });
+      if (!response.ok) throw new Error("Não foi possível excluir o catálogo.");
+      router.push("/catalogo");
+    } catch (caught) {
+      setError(true);
+      setMessage(caught instanceof Error ? caught.message : "Não foi possível excluir o catálogo.");
       setSaving(false);
     }
   }
@@ -326,8 +376,11 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
             image={publication.miniatura}
             meta={publication.descricao}
             duration={formatDuration(publication.duracao)}
+            href={`/exibicao?publicationId=${publication.id}`}
+            acquisitions={publication.monetizacoes}
             variant="row"
             manageMenu={isOwner}
+            onEdit={() => router.push(`/exibicao?publicationId=${publication.id}`)}
             onRemove={() => void removePublication(publication)}
             reorderId={isOwner ? publication.id : undefined}
             isReordering={reorderingId === publication.id}
@@ -338,32 +391,43 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           {catalog && items.length === 0 && <p className="border-b border-white/10 py-8 text-center text-sm text-cream/70">Este catálogo ainda não tem publicações.</p>}
           {!catalog && !loaded?.error && <p className="py-12 text-center text-sm text-cream/70">{isLoading ? "Verificando sessão..." : "Carregando catálogo..."}</p>}
           {loaded?.error && <p className="py-12 text-center text-sm text-red" role="alert">{loaded.error}</p>}
-          {catalog && isOwner && <section className="border-t border-white/15 pt-4" aria-label="Adicionar publicação">
-            <h2 className="mb-2 text-sm font-bold text-white">Adicionar publicação</h2>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <select className="min-w-0 flex-1 bg-panel-muted px-3 py-2 text-sm text-white" value={selectedPublication} onChange={(event) => setSelectedPublication(event.target.value)} disabled={saving}>
-                <option value="">Selecionar publicação própria</option>
-                {available.map((publication) => <option key={publication.id} value={publication.id}>{publication.titulo}</option>)}
-              </select>
-              <button type="button" disabled={!selectedPublication || saving} onClick={() => void addPublication()} className="bg-panel-muted px-4 py-2 text-sm font-semibold text-white hover:bg-gold hover:text-navy disabled:cursor-not-allowed disabled:opacity-50">
-                {saving ? "ADICIONANDO..." : "ADICIONAR"}
-              </button>
-            </div>
-            {available.length === 0 && <p className="mt-2 text-xs text-cream/70">Todas as suas publicações já estão no catálogo ou você ainda não publicou conteúdo.</p>}
-            <p className={`mt-2 text-xs ${error ? "text-red" : "text-cream/75"}`} role={error ? "alert" : "status"} aria-live="polite">{message}</p>
-          </section>}
+          {catalog && isOwner &&
+            <section className="border-t border-white/15 pt-4" aria-label="Adicionar publicação">
+              <h2 className="mb-2 text-sm font-bold text-white">Adicionar publicação</h2>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select className="min-w-0 flex-1 bg-panel-muted px-3 py-2 text-sm text-white" value={selectedPublication} onChange={(event) => setSelectedPublication(event.target.value)} disabled={saving}>
+                  <option value="">Selecionar publicação própria</option>
+                  {available.map((publication) => <option key={publication.id} value={publication.id}>{publication.titulo}</option>)}
+                </select>
+                <button type="button" disabled={!selectedPublication || saving} onClick={() => void addPublication()} className="bg-panel-muted px-4 py-2 text-sm font-semibold text-white hover:bg-gold hover:text-navy disabled:cursor-not-allowed disabled:opacity-50">
+                  {saving ? "ADICIONANDO..." : "ADICIONAR"}
+                </button>
+              </div>
+              {available.length === 0 && <p className="mt-2 text-xs text-cream/70">Todas as suas publicações já estão no catálogo ou você ainda não publicou conteúdo.</p>}
+              <p className={`mt-2 text-xs ${error ? "text-red" : "text-cream/75"}`} role={error ? "alert" : "status"} aria-live="polite">{message}</p>
+            </section>
+          }
         </section>
 
         {catalog && <aside className="flex flex-col gap-6 border border-white/10 bg-panel p-3 sm:p-5">
           <div className="grid gap-5 sm:grid-cols-[minmax(150px,220px)_1fr]">
             <div>
-              <div className="aspect-[3/4] overflow-hidden bg-panel-muted">
+              <div className="aspect-3/4 overflow-hidden border-2 border-orange bg-panel-muted">
                 <img src={thumbnail} alt={`Miniatura do catálogo ${catalog.titulo}`} className="h-full w-full object-cover" />
               </div>
               <p className="bg-ink py-1 text-center text-sm">{catalog.publicacoes.length} itens</p>
             </div>
             <div className="min-w-0 text-right text-sm leading-relaxed text-cream/85">
-              <h1 className="mb-3 text-xl text-white">{catalog.titulo}</h1>
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <h1 className="min-w-0 flex-1 text-xl text-white">{catalog.titulo}</h1>
+                {isOwner && <div className="relative shrink-0">
+                  <button type="button" className="px-2 text-xl leading-none text-cream/80 hover:text-gold" aria-label="Opções do catálogo" aria-haspopup="menu" aria-expanded={catalogMenuOpen} onClick={() => setCatalogMenuOpen((open) => !open)}>≡</button>
+                  {catalogMenuOpen && <div className="absolute right-0 top-full z-20 min-w-44 border border-white/15 bg-panel p-1 text-left shadow-lg" role="menu">
+                    <Link href={`/publicacao_catalogo?edit=${catalog.id}`} role="menuitem" className="block px-3 py-2 text-xs text-cream hover:bg-gold hover:text-navy" onClick={() => setCatalogMenuOpen(false)}>Editar catálogo</Link>
+                    <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs text-cream hover:bg-red hover:text-white" onClick={() => { setCatalogMenuOpen(false); void deleteCatalog(); }}>Excluir catálogo</button>
+                  </div>}
+                </div>}
+              </div>
               <p className="whitespace-pre-line">{catalog.descricao}</p>
               <ChannelInfo
                 channelId={catalog.criador}

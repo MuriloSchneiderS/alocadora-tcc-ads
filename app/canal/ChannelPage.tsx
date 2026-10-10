@@ -14,7 +14,6 @@ import { useAuth } from "../providers";
 type ChannelPageProps = {
   channelId: string;
 };
-
 type OwnedPublication = {
   id: string;
   titulo: string;
@@ -24,7 +23,6 @@ type OwnedPublication = {
   criadoEm: number;
   monetizacoes: { tipo: string; preco: number; duracao?: number }[];
 };
-
 type OwnedCatalog = {
   id: string;
   titulo: string;
@@ -34,7 +32,6 @@ type OwnedCatalog = {
   criadoEm: number;
   monetizacoes: { tipo: string; preco: number; duracao?: number }[];
 };
-
 type ChannelItem = {
   id: string;
   tipo: "publicacao" | "catalogo";
@@ -52,7 +49,6 @@ function timestampToMillis(value: unknown) {
   if (value instanceof Date) return value.getTime();
   return typeof value === "number" ? value : 0;
 }
-
 function formatDuration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
   const totalSeconds = Math.floor(seconds);
@@ -172,6 +168,7 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
       descricao: publication.descricao,
       miniatura: publication.miniatura,
       duracao: formatDuration(publication.duracao),
+      href: `/exibicao?publicationId=${publication.id}`,
       monetizacoes: publication.monetizacoes.map(formatMonetization),
     })),
     ...ownedContent.catalogs.map((catalog) => ({
@@ -261,7 +258,8 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
                     duration={item.duracao}
                     href={item.href}
                     monetizations={item.monetizacoes}
-                    channel={item.tipo === "publicacao" ? { channelId: channel.id, name: channel.name, title: channel.title, avatar: channel.avatar } : undefined}
+                    isCatalog={item.tipo === "catalogo"}
+                    channel={{ channelId: channel.id, name: channel.name, title: channel.title, avatar: channel.avatar }}
                   />)}
                 </section>
                 : <p className="py-12 text-center text-sm text-cream/70">

@@ -29,9 +29,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasExpectedFilePath(path: unknown, prefix: string) {
-  return typeof path === "string"
-    && path.startsWith(prefix)
-    && /^[a-z0-9]{1,10}$/i.test(path.slice(prefix.length));
+  if (typeof path !== "string" || !path.startsWith(prefix.slice(0, prefix.lastIndexOf("arquivo.")))) return false;
+  const filename = path.slice(prefix.lastIndexOf("arquivo."));
+  return /^arquivo(?:-[0-9a-f-]{36})?\.[a-z0-9]{1,10}$/i.test(filename);
 }
 
 function isThumbnailUrl(value: unknown, userId: string, publicationId: string) {
@@ -45,8 +45,9 @@ function isThumbnailUrl(value: unknown, userId: string, publicationId: string) {
       return false;
 
     const objectPath = decodeURIComponent(objectMatch[1]);
-    const prefix = `publicacoes/miniaturas/${userId}/${publicationId}/miniatura.`;
-    return objectPath.startsWith(prefix) && /^[a-z0-9]{1,10}$/i.test(objectPath.slice(prefix.length));
+    const prefix = `publicacoes/miniaturas/${userId}/${publicationId}/`;
+    return objectPath.startsWith(prefix)
+      && /^miniatura(?:-[0-9a-f-]{36})?\.[a-z0-9]{1,10}$/i.test(objectPath.slice(prefix.length));
   } catch {
     return false;
   }
@@ -232,4 +233,257 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ publicationId }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const authentication = await authenticateFirebaseRequest(request);
+  if (!authentication.ok)
+    return Response.json({ error: authentication.error }, { status: authentication.status });
+  const { user } = authentication;
+  const body: unknown = await request.json().catch(() => null);
+  if (!isRecord(body) || typeof body.publicationId !== "string"
+    || !/^[0-9a-f-]{36}$/i.test(body.publicationId)
+    || typeof body.titulo !== "string" || !body.titulo.trim() || body.titulo.length > 200
+    || typeof body.descricao !== "string" || body.descricao.length > 5000
+    || typeof body.tipo !== "string" || !publicationTypes.has(body.tipo)
+    || typeof body.tamanho !== "number" || !Number.isSafeInteger(body.tamanho) || body.tamanho < 0
+    || typeof body.duracao !== "number" || !Number.isFinite(body.duracao) || body.duracao < 0
+    || !hasExpectedFilePath(body.arquivo, `publicacoes/arquivos/${user.uid}/${body.publicationId}/arquivo.`)
+    || typeof body.miniatura !== "string" || !isThumbnailUrl(body.miniatura, user.uid, body.publicationId)
+    || !Array.isArray(body.catalogos) || body.catalogos.length > 50
+    || !body.catalogos.every((catalogId) => typeof catalogId === "string" && catalogId.length > 0 && catalogId.length <= 128)
+    || new Set(body.catalogos).size !== body.catalogos.length
+    || !validMonetizations(body.monetizacoes))
+    return Response.json({ error: "invalid-content" }, { status: 400 });
+
+  try {
+    const [publicationResult, monetizationResult] = await Promise.all([
+      readPublication(user.idToken, user.projectId, body.publicationId),
+      listDocuments(user.idToken, user.projectId, `publicacao/${body.publicationId}/monetizacao`),
+    ]);
+    if (publicationResult.response.status === 404)
+      return Response.json({ error: "content-not-found" }, { status: 404 });
+    if (!publicationResult.response.ok) {
+      console.error("Firestore publication read failed", publicationResult.document?.error?.status ?? publicationResult.response.status);
+      return Response.json({ error: "content-read-failed" }, { status: 500 });
+    }
+    if (!monetizationResult.response.ok)
+      return Response.json({ error: "content-read-failed" }, { status: 500 });
+    const existingDocument = publicationResult.document;
+    const existingFields = existingDocument?.fields ?? {};
+    if (existingFields.criador?.stringValue !== user.uid)
+      return Response.json({ error: "forbidden" }, { status: 403 });
+    if (!existingDocument?.updateTime)
+      return Response.json({ error: "content-save-failed" }, { status: 500 });
+
+    const previousCatalogIds = existingFields.catalogos?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+    const affectedCatalogIds = [...new Set([...previousCatalogIds, ...body.catalogos as string[]])];
+    const catalogResults = await Promise.all(affectedCatalogIds.map((catalogId) => readCatalog(user.idToken, user.projectId, catalogId)));
+    const catalogWrites: unknown[] = [];
+    for (let index = 0; index < affectedCatalogIds.length; index += 1) {
+      const catalogId = affectedCatalogIds[index];
+      const result = catalogResults[index];
+      const shouldContain = (body.catalogos as string[]).includes(catalogId);
+      if (result.response.status === 404) {
+        if (shouldContain) return Response.json({ error: "catalog-not-found" }, { status: 400 });
+        continue;
+      }
+      if (!result.response.ok) return Response.json({ error: "catalog-read-failed" }, { status: 500 });
+      const document = result.document;
+      const fields = document?.fields ?? {};
+      if (fields.criador?.stringValue !== user.uid)
+        return Response.json({ error: "forbidden-catalog" }, { status: 403 });
+      if (!document?.updateTime) return Response.json({ error: "catalog-read-failed" }, { status: 500 });
+
+      const oldPublicationIds = fields.publicacoes?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+      const hadPublication = oldPublicationIds.includes(body.publicationId);
+      if (hadPublication === shouldContain) continue;
+      const publicationIds = shouldContain
+        ? [...oldPublicationIds, body.publicationId]
+        : oldPublicationIds.filter((id) => id !== body.publicationId);
+      let thumbnail = fields.miniatura?.stringValue || emptyCatalogThumbnail;
+      if (shouldContain && oldPublicationIds.length === 0)
+        thumbnail = body.miniatura || emptyCatalogThumbnail;
+      if (!shouldContain && oldPublicationIds[0] === body.publicationId) {
+        const nextFirst = publicationIds[0]
+          ? await readPublication(user.idToken, user.projectId, publicationIds[0])
+          : null;
+        if (nextFirst && !nextFirst.response.ok && nextFirst.response.status !== 404)
+          return Response.json({ error: "content-read-failed" }, { status: 500 });
+        thumbnail = nextFirst?.document?.fields?.miniatura?.stringValue || emptyCatalogThumbnail;
+      }
+      catalogWrites.push({
+        update: {
+          name: `projects/${user.projectId}/databases/(default)/documents/catalogo/${catalogId}`,
+          fields: firestoreFields({ publicacoes: publicationIds, miniatura: thumbnail }),
+        },
+        updateMask: { fieldPaths: ["publicacoes", "miniatura"] },
+        currentDocument: { updateTime: document.updateTime },
+      });
+    }
+
+    const existingMonetizations = new Map(monetizationResult.documents.map((document) => [document.name.split("/").pop() ?? "", document]));
+    const writes: unknown[] = [{
+      update: {
+        name: `projects/${user.projectId}/databases/(default)/documents/publicacao/${body.publicationId}`,
+        fields: firestoreFields({
+          titulo: body.titulo.trim(),
+          descricao: body.descricao.trim(),
+          tipo: body.tipo,
+          tamanho: body.tamanho,
+          duracao: body.duracao,
+          arquivo: body.arquivo as string,
+          miniatura: body.miniatura as string,
+          catalogos: body.catalogos as string[],
+        }),
+      },
+      updateMask: { fieldPaths: ["titulo", "descricao", "tipo", "tamanho", "duracao", "arquivo", "miniatura", "catalogos"] },
+      currentDocument: { updateTime: existingDocument.updateTime },
+    }, ...catalogWrites];
+
+    for (const monetization of body.monetizacoes) {
+      const documentName = `projects/${user.projectId}/databases/(default)/documents/publicacao/${body.publicationId}/monetizacao/${monetization.tipo}`;
+      writes.push({
+        update: {
+          name: documentName,
+          fields: firestoreFields({ tipo: monetization.tipo, preco: monetization.preco, moeda: "BRL", ativo: true }),
+        },
+        ...(existingMonetizations.has(monetization.tipo) ? {} : { currentDocument: { exists: false } }),
+      });
+    }
+    for (const [type, document] of existingMonetizations) {
+      if (!(body.monetizacoes as MonetizationRequest[]).some((item) => item.tipo === type))
+        writes.push({ delete: document.name, currentDocument: { exists: true } });
+    }
+
+    const result = await writeFirestore(user.idToken, user.projectId, writes);
+    if (!result.response.ok) {
+      console.error("Firestore publication update failed", result.error?.status ?? result.response.status);
+      return Response.json({ error: result.response.status === 403 ? "forbidden" : "content-save-failed" }, {
+        status: result.response.status === 403 ? 403 : 500,
+      });
+    }
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
+
+  return Response.json({ publicationId: body.publicationId, updated: true });
+}
+
+export async function DELETE(request: Request) {
+  const authentication = await authenticateFirebaseRequest(request);
+  if (!authentication.ok)
+    return Response.json({ error: authentication.error }, { status: authentication.status });
+  const { user } = authentication;
+  const body: unknown = await request.json().catch(() => null);
+  if (!isRecord(body) || typeof body.publicationId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.publicationId))
+    return Response.json({ error: "invalid-content" }, { status: 400 });
+
+  try {
+    const [publicationResult, monetizationResult] = await Promise.all([
+      readPublication(user.idToken, user.projectId, body.publicationId),
+      listDocuments(user.idToken, user.projectId, `publicacao/${body.publicationId}/monetizacao`),
+    ]);
+    if (publicationResult.response.status === 404)
+      return Response.json({ error: "content-not-found" }, { status: 404 });
+    if (!publicationResult.response.ok) return Response.json({ error: "content-read-failed" }, { status: 500 });
+    if (!monetizationResult.response.ok) return Response.json({ error: "content-read-failed" }, { status: 500 });
+
+    const publication = publicationResult.document;
+    const fields = publication?.fields ?? {};
+    if (fields.criador?.stringValue !== user.uid)
+      return Response.json({ error: "forbidden" }, { status: 403 });
+    if (!publication?.updateTime)
+      return Response.json({ error: "content-save-failed" }, { status: 500 });
+
+    const catalogIds = fields.catalogos?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+    const catalogResults = await Promise.all(catalogIds.map((catalogId) => readCatalog(user.idToken, user.projectId, catalogId)));
+    const writes: unknown[] = [];
+    for (let index = 0; index < catalogIds.length; index += 1) {
+      const catalogId = catalogIds[index];
+      const result = catalogResults[index];
+      if (result.response.status === 404) continue;
+      if (!result.response.ok) return Response.json({ error: "catalog-read-failed" }, { status: 500 });
+      const catalog = result.document;
+      const catalogFields = catalog?.fields ?? {};
+      if (catalogFields.criador?.stringValue !== user.uid)
+        return Response.json({ error: "forbidden-catalog" }, { status: 403 });
+      if (!catalog?.updateTime) return Response.json({ error: "catalog-save-failed" }, { status: 500 });
+
+      const oldIds = catalogFields.publicacoes?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+      if (!oldIds.includes(body.publicationId)) continue;
+      const publicationIds = oldIds.filter((id) => id !== body.publicationId);
+      let thumbnail = catalogFields.miniatura?.stringValue || emptyCatalogThumbnail;
+      if (oldIds[0] === body.publicationId) {
+        const nextFirst = publicationIds[0]
+          ? await readPublication(user.idToken, user.projectId, publicationIds[0])
+          : null;
+        if (nextFirst && !nextFirst.response.ok && nextFirst.response.status !== 404)
+          return Response.json({ error: "content-read-failed" }, { status: 500 });
+        thumbnail = nextFirst?.document?.fields?.miniatura?.stringValue || emptyCatalogThumbnail;
+      }
+      writes.push({
+        update: {
+          name: `projects/${user.projectId}/databases/(default)/documents/catalogo/${catalogId}`,
+          fields: firestoreFields({ publicacoes: publicationIds, miniatura: thumbnail }),
+        },
+        updateMask: { fieldPaths: ["publicacoes", "miniatura"] },
+        currentDocument: { updateTime: catalog.updateTime },
+      });
+    }
+
+    for (const monetization of monetizationResult.documents)
+      writes.push({ delete: monetization.name, currentDocument: { exists: true } });
+    writes.push({
+      delete: `projects/${user.projectId}/databases/(default)/documents/publicacao/${body.publicationId}`,
+      currentDocument: { updateTime: publication.updateTime },
+    });
+
+    const result = await writeFirestore(user.idToken, user.projectId, writes);
+    if (!result.response.ok) {
+      console.error("Firestore publication deletion failed", result.error?.status ?? result.response.status);
+      return Response.json({ error: result.response.status === 403 ? "forbidden" : "content-delete-failed" }, {
+        status: result.response.status === 403 ? 403 : 500,
+      });
+    }
+
+    return Response.json({
+      publicationId: body.publicationId,
+      arquivo: fields.arquivo?.stringValue ?? "",
+      miniatura: fields.miniatura?.stringValue ?? "",
+      deleted: true,
+    });
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
+}
+
+async function readPublication(token: string, projectId: string, publicationId: string) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/publicacao/${encodeURIComponent(publicationId)}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  const document = await response.json().catch(() => null) as {
+    fields?: Record<string, {
+      stringValue?: string;
+      integerValue?: string;
+      doubleValue?: number;
+      arrayValue?: { values?: { stringValue?: string }[] };
+    }>;
+    updateTime?: string;
+    error?: { status?: string };
+  } | null;
+  return { response, document };
+}
+
+async function listDocuments(token: string, projectId: string, path: string) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/${path}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  const result = await response.json().catch(() => null) as {
+    documents?: { name: string }[];
+    error?: { status?: string };
+  } | null;
+  return { response, documents: result?.documents ?? [] };
 }

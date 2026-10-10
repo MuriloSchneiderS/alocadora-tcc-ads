@@ -1,12 +1,13 @@
 'use client';
 
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { db } from "../../lib/firebase";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 import { useAuth } from "../providers";
+import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 
 type Catalog = {
   id: string;
@@ -15,6 +16,9 @@ type Catalog = {
   miniatura: string;
   publicacoes: string[];
   monetizacoes: { tipo: string; preco: number; duracao?: number }[];
+  creatorName: string;
+  creatorTitle: string;
+  creatorAvatar: string;
 };
 
 function formatMonetization(item: Catalog["monetizacoes"][number]) {
@@ -32,11 +36,17 @@ export default function Catalogo() {
   useEffect(() => {
     if (!user) return;
     const uid = user.uid;
+    const displayName = user.displayName;
+    const photoURL = user.photoURL;
     let isCurrent = true;
 
     async function loadCatalogs() {
       try {
-        const snapshots = await getDocs(query(collection(db, "catalogo"), where("criador", "==", uid)));
+        const [snapshots, profileSnapshot] = await Promise.all([
+          getDocs(query(collection(db, "catalogo"), where("criador", "==", uid))),
+          getDoc(doc(db, "usuario", uid)),
+        ]);
+        const profile = profileSnapshot.data();
         const result = await Promise.all(snapshots.docs.map(async (snapshot) => {
           const data = snapshot.data();
           const monetizations = await getDocs(collection(db, "catalogo", snapshot.id, "monetizacao"));
@@ -47,6 +57,9 @@ export default function Catalogo() {
             miniatura: String(data.miniatura || "/assets/catalogo_vazio.png"),
             publicacoes: Array.isArray(data.publicacoes) ? data.publicacoes as string[] : [],
             monetizacoes: monetizations.docs.map((item) => item.data() as Catalog["monetizacoes"][number]),
+            creatorName: String(profile?.nome ?? displayName ?? "Meu canal"),
+            creatorTitle: String(profile?.titulo || DEFAULT_CHANNEL_TITLE),
+            creatorAvatar: String(profile?.avatar || photoURL || DEFAULT_USER_AVATAR),
           };
         }));
         if (isCurrent) setLoadedCatalogs({ uid, catalogs: result });
@@ -86,6 +99,8 @@ export default function Catalogo() {
                   duration={`${catalog.publicacoes.length} itens`}
                   href={`/catalogo/${catalog.id}`}
                   monetizations={catalog.monetizacoes.map(formatMonetization)}
+                  isCatalog
+                  channel={{ channelId: user.uid, name: catalog.creatorName, title: catalog.creatorTitle, avatar: catalog.creatorAvatar }}
                 />)}
               </section>}
       </main>

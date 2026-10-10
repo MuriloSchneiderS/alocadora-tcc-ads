@@ -74,6 +74,18 @@ async function readDocument(token: string, projectId: string, collection: string
   } | null;
   return { response, document };
 }
+
+async function listDocuments(token: string, projectId: string, path: string) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents/${path}`,
+    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+  );
+  const result = await response.json().catch(() => null) as {
+    documents?: { name: string; updateTime?: string }[];
+    error?: { status?: string };
+  } | null;
+  return { response, documents: result?.documents ?? [] };
+}
 function firestoreError(response: Response) {
   return Response.json(
     { error: response.status === 401 ? "unauthorized" : response.status === 403 ? "forbidden" : "catalog-save-failed" },
@@ -138,9 +150,62 @@ export async function PATCH(request: Request) {
   const { user } = authentication;
   const body: unknown = await request.json().catch(() => null);
   if (!isRecord(body) || !isId(body.catalogId)
-    || (body.action !== undefined && body.action !== "add" && body.action !== "remove" && body.action !== "reorder"))
+    || (body.action !== undefined && body.action !== "add" && body.action !== "remove" && body.action !== "reorder" && body.action !== "edit"))
     return Response.json({ error: "invalid-association" }, { status: 400 });
   const action = body.action ?? "add";
+  if (action === "edit") {
+    if (typeof body.titulo !== "string" || !body.titulo.trim() || body.titulo.length > 200
+      || typeof body.descricao !== "string" || body.descricao.length > 5000
+      || !validMonetizations(body.monetizacoes))
+      return Response.json({ error: "invalid-catalog" }, { status: 400 });
+
+    try {
+      const [catalogResult, monetizationResult] = await Promise.all([
+        readDocument(user.idToken, user.projectId, "catalogo", body.catalogId),
+        listDocuments(user.idToken, user.projectId, `catalogo/${body.catalogId}/monetizacao`),
+      ]);
+      if (catalogResult.response.status === 404)
+        return Response.json({ error: "content-not-found" }, { status: 404 });
+      if (!catalogResult.response.ok) return firestoreError(catalogResult.response);
+      if (!monetizationResult.response.ok) return firestoreError(monetizationResult.response);
+      if (catalogResult.document?.fields?.criador?.stringValue !== user.uid)
+        return Response.json({ error: "forbidden" }, { status: 403 });
+      const updateTime = catalogResult.document.updateTime;
+      if (!updateTime) return Response.json({ error: "catalog-save-failed" }, { status: 500 });
+
+      const existing = new Map(monetizationResult.documents.map((document) => [document.name.split("/").pop() ?? "", document]));
+      const writes: unknown[] = [{
+        update: {
+          name: `projects/${user.projectId}/databases/(default)/documents/catalogo/${body.catalogId}`,
+          fields: firestoreFields({ titulo: body.titulo.trim(), descricao: body.descricao.trim() }),
+        },
+        updateMask: { fieldPaths: ["titulo", "descricao"] },
+        currentDocument: { updateTime },
+      }];
+      for (const monetization of body.monetizacoes) {
+        const documentName = `projects/${user.projectId}/databases/(default)/documents/catalogo/${body.catalogId}/monetizacao/${monetization.tipo}`;
+        const fields = {
+          ...firestoreFields({ tipo: monetization.tipo, preco: monetization.preco, moeda: "BRL" }),
+          ativo: { booleanValue: true },
+          ...(monetization.duracao ? { duracao: { integerValue: String(monetization.duracao) } } : {}),
+        };
+        writes.push({
+          update: { name: documentName, fields },
+          ...(existing.has(monetization.tipo) ? {} : { currentDocument: { exists: false } }),
+        });
+      }
+      for (const [type, document] of existing) {
+        if (!body.monetizacoes.some((item) => item.tipo === type))
+          writes.push({ delete: document.name, currentDocument: { exists: true } });
+      }
+
+      const result = await commitFirestore(user.idToken, user.projectId, writes);
+      if (!result.ok) return firestoreError(result);
+      return Response.json({ catalogId: body.catalogId, action: "edit" });
+    } catch {
+      return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+    }
+  }
   const isReorderRequest = action === "reorder";
   if (isReorderRequest) {
     if (!Array.isArray(body.publicationIds) || body.publicationIds.length > 500
@@ -253,4 +318,70 @@ export async function PATCH(request: Request) {
     ...(isReorderRequest ? { publicationIds: body.publicationIds } : {}),
     action,
   });
+}
+
+export async function DELETE(request: Request) {
+  const authentication = await authenticateFirebaseRequest(request);
+  if (!authentication.ok)
+    return Response.json({ error: authentication.error }, { status: authentication.status });
+  const { user } = authentication;
+  const body: unknown = await request.json().catch(() => null);
+  if (!isRecord(body) || !isId(body.catalogId))
+    return Response.json({ error: "invalid-catalog" }, { status: 400 });
+
+  try {
+    const [catalogResult, monetizationResult] = await Promise.all([
+      readDocument(user.idToken, user.projectId, "catalogo", body.catalogId),
+      listDocuments(user.idToken, user.projectId, `catalogo/${body.catalogId}/monetizacao`),
+    ]);
+    if (catalogResult.response.status === 404)
+      return Response.json({ error: "content-not-found" }, { status: 404 });
+    if (!catalogResult.response.ok) return firestoreError(catalogResult.response);
+    if (!monetizationResult.response.ok) return firestoreError(monetizationResult.response);
+
+    const catalogDocument = catalogResult.document;
+    const catalogFields = catalogDocument?.fields ?? {};
+    if (catalogFields.criador?.stringValue !== user.uid)
+      return Response.json({ error: "forbidden" }, { status: 403 });
+    if (!catalogDocument?.updateTime)
+      return Response.json({ error: "catalog-save-failed" }, { status: 500 });
+
+    const publicationIds = catalogFields.publicacoes?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+    const publicationResults = await Promise.all(publicationIds.map((publicationId) =>
+      readDocument(user.idToken, user.projectId, "publicacao", publicationId)));
+    const writes: unknown[] = [];
+    for (let index = 0; index < publicationResults.length; index += 1) {
+      const result = publicationResults[index];
+      if (result.response.status === 404) continue;
+      if (!result.response.ok) return firestoreError(result.response);
+      const document = result.document;
+      const fields = document?.fields ?? {};
+      if (fields.criador?.stringValue !== user.uid)
+        return Response.json({ error: "forbidden" }, { status: 403 });
+      if (!document?.updateTime)
+        return Response.json({ error: "publication-save-failed" }, { status: 500 });
+      const catalogIds = fields.catalogos?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
+      writes.push({
+        update: {
+          name: `projects/${user.projectId}/databases/(default)/documents/publicacao/${publicationIds[index]}`,
+          fields: firestoreFields({ catalogos: catalogIds.filter((id) => id !== body.catalogId) }),
+        },
+        updateMask: { fieldPaths: ["catalogos"] },
+        currentDocument: { updateTime: document.updateTime },
+      });
+    }
+
+    for (const monetization of monetizationResult.documents)
+      writes.push({ delete: monetization.name, currentDocument: { exists: true } });
+    writes.push({
+      delete: `projects/${user.projectId}/databases/(default)/documents/catalogo/${body.catalogId}`,
+      currentDocument: { updateTime: catalogDocument.updateTime },
+    });
+    const result = await commitFirestore(user.idToken, user.projectId, writes);
+    if (!result.ok) return firestoreError(result);
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
+
+  return Response.json({ catalogId: body.catalogId, deleted: true });
 }

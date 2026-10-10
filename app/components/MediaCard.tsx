@@ -11,6 +11,7 @@ type MediaCardProps = {
   duration?: string;
   href?: string;
   monetizations?: string[];
+  isCatalog?: boolean;
   channel?: {
     channelId?: string;
     name: string;
@@ -23,6 +24,7 @@ type MediaCardProps = {
   }[];
   variant?: "grid" | "row";
   manageMenu?: boolean;
+  onEdit?: () => void;
   onRemove?: () => void;
   reorderId?: string;
   isReordering?: boolean;
@@ -31,7 +33,7 @@ type MediaCardProps = {
   onReorderEnd?: () => void;
 };
 
-export default function MediaCard({ title, image, meta, duration, href, monetizations, channel, acquisitions, variant = "grid", manageMenu = false, onRemove, reorderId, isReordering = false, onReorderStart, onReorderMove, onReorderEnd }: MediaCardProps) {
+export default function MediaCard({ title, image, meta, duration, href, monetizations, isCatalog = false, channel, acquisitions, variant = "grid", manageMenu = false, onEdit, onRemove, reorderId, isReordering = false, onReorderStart, onReorderMove, onReorderEnd }: MediaCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdPosition = useRef<{ x: number; y: number } | null>(null);
@@ -78,15 +80,20 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
     return (
       <article data-publication-id={reorderId} className={`flex gap-3 border-b border-white/10 py-3 first:pt-0 ${isReordering ? "bg-white/5 opacity-60" : ""}`}>
         <div className="relative h-20 w-32 shrink-0 overflow-hidden bg-panel-muted">
-          <img src={image} alt="" className="h-full w-full object-cover" />
+          <a href={href ?? "/exibicao"} aria-label={`Abrir publicação: ${title}`} className="group block h-full w-full">
+            <img src={image} alt="" className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+          </a>
           {duration && <span className="absolute bottom-1 right-1 bg-ink/90 px-1 text-[10px]">{duration}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="media-card-title line-clamp-2 text-sm font-bold text-white">{title}</h3>
+          <h3 className="media-card-title line-clamp-2 text-sm font-bold text-white"><a href={href ?? "/exibicao"} className="hover:text-gold">{title}</a></h3>
           {meta && <p className="mt-1 line-clamp-2 text-xs text-cream/70">{meta}</p>}
           {channel && <ChannelInfo {...channel} className="mt-2" />}
+          {acquisitions && acquisitions.length > 0 && <div className="mt-2 flex justify-end">
+            <AcquisitionOptions options={acquisitions} compact direction="inline" />
+          </div>}
         </div>
-        {manageMenu && onRemove && <div className="relative self-start">
+        {manageMenu && (onEdit || onRemove) && <div className="relative self-start">
           <button type="button" className={`touch-none px-2 text-xl leading-none text-cream/80 hover:text-gold ${reorderId ? "cursor-grab active:cursor-grabbing" : ""}`} aria-label={reorderId ? `Opções e reordenação para ${title}; segure para mover` : `Opções para ${title}`} aria-haspopup="menu" aria-expanded={menuOpen} onPointerDown={startHold} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onClick={() => {
             if (suppressClick.current) {
               suppressClick.current = false;
@@ -97,12 +104,12 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
             ≡
           </button>
           {menuOpen && <div className="absolute right-0 top-full z-20 min-w-44 border border-white/15 bg-panel p-1 shadow-lg" role="menu">
-            <button type="button" role="menuitem" disabled className="block w-full px-3 py-2 text-left text-xs text-cream/45" title="Edição de publicação ainda não disponível">
+            {onEdit && <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs text-cream hover:bg-gold hover:text-navy" onClick={() => { setMenuOpen(false); onEdit(); }}>
               Editar publicação
-            </button>
-            <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs text-cream hover:bg-red hover:text-white" onClick={() => { setMenuOpen(false); onRemove(); }}>
+            </button>}
+            {onRemove && <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs text-cream hover:bg-red hover:text-white" onClick={() => { setMenuOpen(false); onRemove(); }}>
               Remover publicação do catálogo
-            </button>
+            </button>}
           </div>}
         </div>}
       </article>
@@ -111,7 +118,7 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
 
   return (
     <article className="min-w-0">
-      <div className="media-card-thumbnail group relative block aspect-video overflow-hidden bg-panel-muted">
+      <div className={`media-card-thumbnail group relative block aspect-video overflow-hidden bg-panel-muted ${isCatalog ? "border-2 border-orange" : ""}`}>
         <a href={href ?? "/exibicao"} className="absolute inset-0" aria-label={`Abrir: ${title}`}>
           <img src={image} alt="" className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
         </a>
@@ -124,10 +131,17 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
       <div className="media-card-info">
         <div className="min-w-0 flex-1">
           <h3 className="media-card-title line-clamp-2 text-xs font-medium text-white">{title}</h3>
-          {meta && !channel && <p className="truncate text-[11px] text-cream/65">{meta}</p>}
+          {isCatalog
+            ? <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+              {meta && <p className="line-clamp-2 min-w-0 flex-1 text-[11px] text-cream/65">{meta}</p>}
+              {channel && <ChannelInfo {...channel} className="max-w-[48%] shrink-0" />}
+            </div>
+            : <>
+              {meta && <p className="truncate text-[11px] text-cream/65">{meta}</p>}
+            </>}
         </div>
         <div className="media-card-actions">
-          {channel && <ChannelInfo {...channel} />}
+          {channel && !isCatalog && <ChannelInfo {...channel} />}
         </div>
       </div>
     </article>

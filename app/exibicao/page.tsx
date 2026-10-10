@@ -2,6 +2,7 @@ import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 import ChannelInfo from "../components/ChannelInfo";
 import VideoPlayer from "../components/VideoPlayer";
+import PublicationDetail from "./PublicationDetail";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -57,6 +58,9 @@ function MediaViewer({ media }: { media: PublicationMedia }) {
 
 export default async function Exibicao({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
+  const publicationId = firstParam(params.publicationId);
+  if (publicationId) return <PublicationDetail publicationId={publicationId} />;
+
   const media: PublicationMedia = {
     ...fallbackMedia,
     url: firstParam(params.url) || fallbackMedia.url,
