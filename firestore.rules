@@ -11,6 +11,11 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/catalogo/$(catalogId)).data.criador == request.auth.uid;
     }
 
+    function ownsCatalogAfter(catalogId) {
+      return signedIn()
+        && getAfter(/databases/$(database)/documents/catalogo/$(catalogId)).data.criador == request.auth.uid;
+    }
+
     function validPublication(data) {
       return data.keys().hasAll([
           'criador', 'titulo', 'descricao', 'data_criacao', 'tipo', 'tamanho',
@@ -89,7 +94,7 @@ service cloud.firestore {
 
       match /monetizacao/{monetizationId} {
         allow read: if true;
-        allow create, update: if ownsCatalog(catalogId)
+        allow create, update: if ownsCatalogAfter(catalogId)
           && validMonetization(request.resource.data, monetizationId, true);
         allow delete: if ownsCatalog(catalogId);
       }
