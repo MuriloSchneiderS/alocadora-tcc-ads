@@ -436,7 +436,6 @@ export default function Publicacao() {
         {/*Área de upload do arquivo e miniatura e informações da publicação*/}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            {existingPublication && <p className="text-xs text-cream/75">Arquivo atual: {existingPublication.arquivo.split("/").pop()}</p>}
             <UploadZone label={editingId ? "Substituir arquivo (opcional)" : undefined} className="h-full" formats="Vídeo, áudio, imagem e livro." accept={formatosArquivo} disabled={publicando} onFileAccepted={setArquivo} />
           </div>
           <section className="space-y-1">
