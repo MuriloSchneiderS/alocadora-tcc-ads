@@ -22,10 +22,11 @@ Protótipo de estrutura:
         - data_criacao (timestamp)
         - criador (usuarioId)
         - publicacoes (array de publicacaoId e posicao no catalogo)
-    catalogo/{catalogoId}/monetizacao/{monetizacaoId} (catalogo pode ter várias monetizações, como aluguel, assinatura e compra)
+    catalogo/{catalogoId}/monetizacao/{monetizacaoId} 
         - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
         - preco (number)
         - ativo (boolean)
+        - moeda
     publicacao/{publicacaoId}
         - titulo (string)
         - descricao (string)
@@ -41,7 +42,7 @@ Protótipo de estrutura:
         - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
         - preco (number)
         - ativo (boolean)
-        
+
     acesso/{usuarioId}/publicacoes/{publicacaoId}
         - usuario (usuarioId)
         - conteudo (publicacaoId)
