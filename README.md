@@ -41,6 +41,7 @@ Protótipo de estrutura:
         - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
         - preco (number)
         - ativo (boolean)
+        
     acesso/{usuarioId}/publicacoes/{publicacaoId}
         - usuario (usuarioId)
         - conteudo (publicacaoId)
@@ -79,4 +80,29 @@ Protótipo de estrutura:
     Nenhuma credencial Firebase Admin/service account é necessária para login, consulta de sessão ou publicação. Os endpoints usam `NEXT_PUBLIC_FIREBASE_API_KEY` e `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, já fornecidos pela configuração Firebase do cliente; o token do usuário e as regras do Firestore controlam a autorização.
 
     APIs de perfil e edição de publicação utilizam `authenticateFirebaseRequest`, deriva o proprietário de `user.uid` e mantem validação de campos e regras de propriedade no Firestore. 
-    Não aceite `uid` do cliente como prova de identidade. As regras atuais negam escrita em `acesso` e `transacao`; essas gravações devem ficar num backend privilegiado, por exemplo uma Cloud Function/webhook Stripe que valide a confirmação do pagamento. Isso exigirá uma identidade de serviço adequada ao ambiente de deploy, mas não exige usar gcloud no desenvolvimento do cliente.
+    Não aceita `uid` do cliente como prova de identidade. As regras atuais negam escrita em `acesso` e `transacao`; essas gravações devem ficar num backend privilegiado, por exemplo uma webhook que valide a confirmação do pagamento. Isso exigirá uma identidade de serviço adequada ao ambiente de deploy, mas não exige usar gcloud no desenvolvimento do cliente.
+
+### Gateway de Pagamento Abacate Pay
+    O Abacate Pay cobre nativamente os formatos de venda planejados através dos endpoints POST /products/create e gerenciamento de cobranças:
+        • Compra Avulsa & Aluguel: Ambos são tratados como cobranças únicas baseadas em produtos (metadata ou externalId). A diferença do Aluguel (7 dias) não muda o pagamento em si, mas sim a sua lógica de Backend: quando o webhook do Abacate Pay avisar que foi pago, o Firebase grava um timestamp dataExpiracao: agora + 7 dias no documento de acesso do usuário.
+        • Assinatura (30 dias): O Abacate Pay possui endpoints dedicados para cobrança recorrente (POST /subscriptions/create). Ele lida com os ciclos automáticos de cobrança a cada 30 dias.
+        • Gratuito: Ignora o ecossistema do gateway e apenas libera o acesso direto no Firestore. (o usuário ainda pode pagar através da página de exibição se quiser)
+
+    1.Ação do Usuário: O criador preenche o formulário da publicação (título, preço, tipo de monetização) no Frontend.
+    2.Camada Segura (Next.js API Route): O Frontend envia os dados para uma Rota de API do Next.js (nunca direto do cliente para o Abacate Pay para não expor as chaves de API secretas).
+    3.Criação em Paralelo:
+        • A rota cria o documento na coleção publicacao no Firestore.
+        • A mesma rota dispara um fetch ou usa o SDK Node da Abacate Pay para criar o produto no gateway.
+    4.Vinculação: O ID do produto retornado pelo Abacate Pay é salvo dentro da subcoleção monetizacoes do Firestore. Quando outro usuário clicar em "Adquirir", você gera um checkout (POST /checkouts/create) usando esse ID de produto.
+
+    ⚠️ O recurso de Split de Pagamento Automático (onde o gateway divide o Pix na hora, mandando por exemplo 90% para o criador e 10% de taxa para a sua plataforma) está listado como "Em Breve" na Abacate Pay.
+    Enquanto o split nativo não é lançado:
+        Transferência Manual / Payout Automatizado: Todo o dinheiro cai na conta bancária da plataforma. Mantém um saldo no Firestore de quanto cada criador acumulou. Mensalmente ou semanalmente, a rota de transferências via API da Abacate Pay (POST /pix/send) é usada para enviar os valores em lote para a chave Pix dos criadores.
+    Ou
+        [Usuário paga R$ 50]
+                ↓
+        [AbacatePay recebe R$ 50 na sua conta]
+                ↓
+        [Backend calcula: R$ 42,50 para criador + R$ 7,50 para você]
+                ↓
+        [Cria withdraw de R$ 42,50 para chave PIX do criador]
