@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../providers";
 
 type Transaction = {
@@ -80,30 +80,37 @@ export default function PaymentDashboard() {
   const [busySubscription, setBusySubscription] = useState("");
   const [message, setMessage] = useState("");
 
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
-    try {
-      const response = await fetch("/api/payments/dashboard", {
+    const response = await fetch("/api/payments/dashboard", {
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-        cache: "no-store",
-      });
-      const result = await response.json().catch(() => null) as DashboardData & { error?: string } | null;
-      if (!response.ok || !result)
-        throw new Error(result?.error === "firebase-admin-configuration"
-          ? "Configure o Firebase Admin no servidor para carregar vendas e compras."
-          : "Não foi possível carregar as informações de pagamentos.");
-      setData(result);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível carregar as informações de pagamentos.");
-    } finally {
-      setLoading(false);
-    }
-  }
+      cache: "no-store",
+    });
+    const result = await response.json().catch(() => null) as DashboardData & { error?: string } | null;
+    if (!response.ok || !result)
+      throw new Error(result?.error === "firebase-admin-configuration"
+        ? "Configure o Firebase Admin no servidor para carregar vendas e compras."
+        : "Não foi possível carregar as informações de pagamentos.");
+    return result;
+  }, [user]);
 
   useEffect(() => {
-    void loadDashboard();
-  }, [user]);
+    let current = true;
+    void loadDashboard()
+      .then((result) => {
+        if (current && result) setData(result);
+      })
+      .catch((error: unknown) => {
+        if (current)
+          setMessage(error instanceof Error ? error.message : "Não foi possível carregar as informações de pagamentos.");
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [loadDashboard]);
 
   const paidTransactions = useMemo(
     () => data?.transacoes.filter((transaction) => transaction.status === "pago") ?? [],
