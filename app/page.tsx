@@ -172,7 +172,7 @@ export default function Home() {
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {latestPublication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]" aria-label="Publicação mais recente">
-          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 overflow-hidden bg-panel-muted lg:h-[340px]">
+          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 overflow-hidden bg-panel-muted lg:h-85">
             <img src={latestPublication.thumbnail} alt={latestPublication.title} className="h-full w-full object-cover" />
           </Link>
           <div className="flex flex-col justify-between border border-white/10 bg-panel p-3">
