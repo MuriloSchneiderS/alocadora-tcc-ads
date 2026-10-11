@@ -24,7 +24,7 @@ type PublicationView = {
   channelName: string;
   channelTitle: string;
   channelAvatar: string;
-  monetizacoes: { label: string; price: string }[];
+  monetizacoes: { label: string; price: string; tipo?: string }[];
 };
 
 type RelatedPublication = {
@@ -71,9 +71,9 @@ function toAcquisitionOptions(items: { tipo?: string; preco?: number; duracao?: 
     const price = Number(item.preco ?? 0) === 0
       ? "Grátis"
       : `R$${(Number(item.preco) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-    if (item.tipo === "gratuito") return { label: "Acesso gratuito", price };
-    if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price };
-    return { label: "Compre", price };
+    if (item.tipo === "gratuito") return { label: "Acesso gratuito", price, tipo: item.tipo };
+    if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price, tipo: item.tipo };
+    return { label: "Compre", price, tipo: item.tipo };
   });
 }
 
@@ -236,7 +236,13 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
               </div>
             </div>
             <div className="mt-auto pt-5">
-              {publication.monetizacoes.length > 0 && <div className="mb-4"><AcquisitionOptions direction="inline" options={publication.monetizacoes} /></div>}
+              {publication.monetizacoes.length > 0 && <div className="mb-4"><AcquisitionOptions
+                direction="inline"
+                options={publication.monetizacoes}
+                originType="publicacao"
+                originId={publicationId}
+                ownerId={publication.criador}
+              /></div>}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" className="bg-panel-muted px-5 py-2 text-xl text-white hover:bg-gold hover:text-navy">Seguir</button>

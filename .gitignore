@@ -35,6 +35,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+alocadora-60233-firebase-adminsdk-fbsvc-2230ab951d.json
 
 # vercel
 .vercel

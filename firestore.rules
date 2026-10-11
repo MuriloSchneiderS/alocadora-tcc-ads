@@ -137,6 +137,22 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /assinatura/{subscriptionId} {
+      allow read, write: if false;
+    }
+
+    match /produto_gateway/{productId} {
+      allow read, write: if false;
+    }
+
+    match /eventos_pagamento/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /acesso/{userId}/publicacoes/{publicationId}/fontes/{grantId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

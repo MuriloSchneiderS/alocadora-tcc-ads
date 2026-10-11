@@ -263,6 +263,21 @@ textarea:focus-visible {
   color: var(--navy);
 }
 
+.acquisition-price:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.acquisition-price:not(button) {
+  cursor: default;
+}
+
+.acquisition-price:not(button):hover {
+  background: var(--ink);
+  border-color: rgb(248 227 196 / 28%);
+  color: var(--cream);
+}
+
 .acquisition-options-compact {
   gap: 2px;
 }

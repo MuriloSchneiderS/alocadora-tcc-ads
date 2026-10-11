@@ -6,7 +6,7 @@ Protótipo de estrutura:
     Backend: Next.js API Routes;
     Autenticação: Firebase Auth; (Google, Email/Senha...);
     Banco de Dados: Firestore (Banco de Dados, url do storage), Cloud Storage(Armazenamento de arquivos);
-    Pagamentos: Stripe; (Pagamentos, assinaturas, checkout...)
+    Pagamentos: Abacate Pay; (checkout, Pix/cartão, assinaturas de catálogo...)
     Deploy: Vercel (Frontend e Backend);
 ## Estrutura do Banco de Dados
 ### Firestore:
@@ -22,8 +22,8 @@ Protótipo de estrutura:
         - data_criacao (timestamp)
         - criador (usuarioId)
         - publicacoes (array de publicacaoId e posicao no catalogo)
-    catalogo/{catalogoId}/monetizacao/{monetizacaoId} 
-        - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
+    catalogo/{catalogoId}/monetizacao/{monetizacaoId}
+        - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias; assinatura mensal; compra perpétua)
         - preco (number)
         - ativo (boolean)
         - moeda
@@ -38,30 +38,28 @@ Protótipo de estrutura:
         - duracao (number, em segundos, caso seja video ou audio)
         - catalogos (array de catalogoId e posicao no catalogo) (catalogos em que está)
         - criador (usuarioId)
-    publicacao/{publicacaoId}/monetizacao/{monetizacaoId} (publicacao pode ter várias monetizações, como gratuito, aluguel e compra)
-        - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias e assinatura 30 de acesso, compra perpétuo e permite download)
+    publicacao/{publicacaoId}/monetizacao/{monetizacaoId} (publicação pode ter gratuito, aluguel ou compra)
+        - tipo (enum: aluguel, compra, gratuito) (aluguel 7 dias; compra perpétua e permite download)
         - preco (number)
         - ativo (boolean)
 
     acesso/{usuarioId}/publicacoes/{publicacaoId}
-        - usuario (usuarioId)
-        - conteudo (publicacaoId)
-        - tipo (enum: aluguel, compra, assinatura)
-        - origem_tipo (enum: publicacao, catalogo)
-        - origem_id (publicacaoId ou catalogoId comprado)
-        - comprado_em (timestamp)
-        - expira_em (timestamp, caso seja aluguel ou assinatura)
-        - ativo (boolean)
-        - transacao (transacaoId)
+        - ativo (boolean, resumo calculado pelo servidor a partir das concessões)
+        - expira_em (timestamp ou null para acesso perpétuo)
+        - fontes/{fonteId} (concessão individual; somente backend pode ler/escrever)
     transacao/{transacaoId}
         - comprador (usuarioId)
         - vendedor (usuarioId)
-        - publicacao (publicacaoId)
-        - catalogo (catalogoId)
-        - tipo (enum: aluguel, compra, assinatura)
-        - comprado_em (timestamp)
-        - expira_em (timestamp, caso seja aluguel ou assinatura)
-        - hash (stripe checkout session id)
+        - origem_tipo e origem_id (publicacao ou catalogo)
+        - publicacoes (ids cobertos pela aquisição)
+        - tipo (aluguel, compra ou assinatura)
+        - preco (centavos), moeda (BRL), status
+        - checkout_id (ID retornado pela Abacate Pay)
+        - comprado_em e expira_em (quando aplicável)
+    assinatura/{subscriptionId} (metadados internos, somente API autenticada)
+        - usuario, vendedor, catalogo, publicacoes, preco, ciclo, status, expira_em
+    produto_gateway/{chave} e eventos_pagamento/{hashEvento}
+        - cache de produtos/ciclos e controle idempotente de webhooks (somente servidor)
 
 ### Storage:
     O fluxo de publicação envia os arquivos diretamente do navegador ao Firebase Storage. Os objetos ficam em:
@@ -78,32 +76,18 @@ Protótipo de estrutura:
     - `lib/firebase-auth-server.ts` centraliza validação do ID token e obtenção do `uid`; cada endpoint protegido deve chamá-lo e usar o `uid` retornado, nunca um ID enviado no corpo.
     - `POST /api/content` reutiliza o autenticador e encaminha gravações ao Firestore REST com o token do usuário. As regras Firestore continuam autorizando cada gravação.
 
-    Nenhuma credencial Firebase Admin/service account é necessária para login, consulta de sessão ou publicação. Os endpoints usam `NEXT_PUBLIC_FIREBASE_API_KEY` e `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, já fornecidos pela configuração Firebase do cliente; o token do usuário e as regras do Firestore controlam a autorização.
+    O projeto antes deste fluxo não utilizava Firebase Admin: as variáveis `NEXT_PUBLIC_FIREBASE_*` do `.env` configuram o SDK web e não concedem privilégios administrativos. Login e publicação padrão continuam usando o ID token do usuário e as regras do Firestore. Esta integração adiciona Firebase Admin somente no servidor para que checkout e webhooks gravem concessões e transações confiáveis; por isso, ela exige também uma credencial de conta de serviço, guardada em variáveis secretas locais/Vercel e nunca no navegador.
 
-    APIs de perfil e edição de publicação utilizam `authenticateFirebaseRequest`, deriva o proprietário de `user.uid` e mantem validação de campos e regras de propriedade no Firestore. 
-    Não aceita `uid` do cliente como prova de identidade. As regras atuais negam escrita em `acesso` e `transacao`; essas gravações devem ficar num backend privilegiado, por exemplo uma webhook que valide a confirmação do pagamento. Isso exigirá uma identidade de serviço adequada ao ambiente de deploy, mas não exige usar gcloud no desenvolvimento do cliente.
+    APIs protegidas usam `authenticateFirebaseRequest`, derivam o proprietário de `user.uid` e não aceitam UID enviado no corpo como prova de identidade. As regras negam escrita do cliente em concessões, transações, assinaturas, cache de produtos e eventos de webhook.
 
-### Gateway de Pagamento Abacate Pay
-    O Abacate Pay cobre nativamente os formatos de venda planejados através dos endpoints POST /products/create e gerenciamento de cobranças:
-        • Compra Avulsa & Aluguel: Ambos são tratados como cobranças únicas baseadas em produtos (metadata ou externalId). A diferença do Aluguel (7 dias) não muda o pagamento em si, mas sim a sua lógica de Backend: quando o webhook do Abacate Pay avisar que foi pago, o Firebase grava um timestamp dataExpiracao: agora + 7 dias no documento de acesso do usuário.
-        • Assinatura (30 dias): O Abacate Pay possui endpoints dedicados para cobrança recorrente (POST /subscriptions/create). Ele lida com os ciclos automáticos de cobrança a cada 30 dias.
-        • Gratuito: Ignora o ecossistema do gateway e apenas libera o acesso direto no Firestore. (o usuário ainda pode pagar através da página de exibição se quiser)
+    - `POST /api/payments/checkout` verifica a monetização e seu preço no Firestore, cria/reusa produto no gateway e retorna uma URL de Checkout.
+    - `POST /api/webhooks/abacatepay` valida o segredo compartilhado e a assinatura HMAC v2 antes de registrar pagamento e liberar acesso.
+    - `GET /api/payments/dashboard` devolve dados do próprio usuário; `POST /api/payments/subscriptions/cancel` interrompe a recorrência sem antecipar o fim do acesso já pago.
 
-    1.Ação do Usuário: O criador preenche o formulário da publicação (título, preço, tipo de monetização) no Frontend.
-    2.Camada Segura (Next.js API Route): O Frontend envia os dados para uma Rota de API do Next.js (nunca direto do cliente para o Abacate Pay para não expor as chaves de API secretas).
-    3.Criação em Paralelo:
-        • A rota cria o documento na coleção publicacao no Firestore.
-        • A mesma rota dispara um fetch ou usa o SDK Node da Abacate Pay para criar o produto no gateway.
-    4.Vinculação: O ID do produto retornado pelo Abacate Pay é salvo dentro da subcoleção monetizacoes do Firestore. Quando outro usuário clicar em "Adquirir", você gera um checkout (POST /checkouts/create) usando esse ID de produto.
+### Pagamentos
 
-    ⚠️ O recurso de Split de Pagamento Automático (onde o gateway divide o Pix na hora, mandando por exemplo 90% para o criador e 10% de taxa para a sua plataforma) está listado como "Em Breve" na Abacate Pay.
-    Enquanto o split nativo não é lançado:
-        Transferência Manual / Payout Automatizado: Todo o dinheiro cai na conta bancária da plataforma. Mantém um saldo no Firestore de quanto cada criador acumulou. Mensalmente ou semanalmente, a rota de transferências via API da Abacate Pay (POST /pix/send) é usada para enviar os valores em lote para a chave Pix dos criadores.
-    Ou
-        [Usuário paga R$ 50]
-                ↓
-        [AbacatePay recebe R$ 50 na sua conta]
-                ↓
-        [Backend calcula: R$ 42,50 para criador + R$ 7,50 para você]
-                ↓
-        [Cria withdraw de R$ 42,50 para chave PIX do criador]
+O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate Pay. O servidor confirma o preço no Firestore e, após receber um webhook válido de pagamento, registra a transação e libera o acesso.
+
+Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações e assinaturas; ao cancelar uma assinatura, o acesso continua até o fim do período pago.
+
+As gravações de pagamento e permissões usam Firebase Admin somente no servidor; suas credenciais administrativas não devem ser expostas ao navegador. Os pagamentos são recebidos pela plataforma, sem divisão automática de valores entre criadores.

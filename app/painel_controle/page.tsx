@@ -7,6 +7,7 @@ import { ChangeEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Header from "../components/Header";
+import PaymentDashboard from "../components/PaymentDashboard";
 import { auth, db, storage } from "../../lib/firebase";
 import { createDefaultUserProfile, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 import { useAuth } from "../providers";
@@ -146,7 +147,7 @@ export default function PainelControle() {
 
   return <div className="min-h-screen bg-ink text-cream">
     <Header title="Painel do canal" showSearch={false} />
-    <main className="mx-auto max-w-3xl bg-panel px-5 py-4 sm:px-6">
+    <main className="mx-auto max-w-6xl bg-panel px-5 py-4 sm:px-6">
       <section className="grid gap-5 md:grid-cols-[145px_1fr]">
         <div>
           <p className="mb-1 text-sm">Ícone do canal:</p>
@@ -170,11 +171,7 @@ export default function PainelControle() {
           </div>
         </div>
       </section>
-      <div className="clear-both pt-14" role="status">
-        <p className="border border-white/10 bg-panel-muted p-4 text-sm text-cream/75">
-          Estatísticas, monetização e carteira estarão disponíveis quando esses dados forem implementados.
-        </p>
-      </div>
+      <PaymentDashboard />
       <button type="button" onClick={handleSignOut} className="mt-8 border border-red px-5 py-2 text-xs font-bold text-red hover:bg-red hover:text-white">FAZER LOGOFF</button>
     </main>
   </div>;
