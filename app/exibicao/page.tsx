@@ -1,6 +1,4 @@
 import Header from "../components/Header";
-import MediaCard from "../components/MediaCard";
-import ChannelInfo from "../components/ChannelInfo";
 import VideoPlayer from "../components/VideoPlayer";
 import PublicationDetail from "./PublicationDetail";
 
@@ -12,21 +10,6 @@ type PublicationMedia = {
   title: string;
   description: string;
   fileName: string;
-};
-
-const related = [
-  ["Marathon - Official Cinematic Short Story Trailer", "https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=600&q=80", "8:44"],
-  ["Watch Dogs: Legion - Tipping Point Cinematic Trailer", "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=600&q=80", "1:35"],
-  ["Alberto Mielgo - Spider-Man: Into the Spider-Verse", "https://images.unsplash.com/photo-1534809027769-b00d750a6bac?auto=format&fit=crop&w=600&q=80", "1:20"],
-  ["Love, Death + Robots | Netflix", "https://images.unsplash.com/photo-1535223289827-42f1e9919769?auto=format&fit=crop&w=600&q=80", "2:14"],
-];
-
-const fallbackMedia: PublicationMedia = {
-  url: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-  mimeType: "video/mp4",
-  title: "The Windshield Wiper",
-  description: "Arquivo de demonstração. Quando o Firestore estiver conectado, estes dados virão do documento da publicação.",
-  fileName: "the-windshield-wiper.mp4",
 };
 
 function firstParam(value: string | string[] | undefined) {
@@ -61,13 +44,20 @@ export default async function Exibicao({ searchParams }: { searchParams: SearchP
   const publicationId = firstParam(params.publicationId);
   if (publicationId) return <PublicationDetail publicationId={publicationId} />;
 
+  const url = firstParam(params.url);
+  if (!url) {
+    return <div className="min-h-screen bg-ink text-cream"><Header /><main className="mx-auto max-w-3xl px-5 py-12 text-center">
+      <h1 className="text-2xl text-white">Publicação não encontrada</h1>
+      <p className="mt-2 text-sm text-cream/70">Escolha uma publicação para assistir ou visualizar o conteúdo.</p>
+    </main></div>;
+  }
+
   const media: PublicationMedia = {
-    ...fallbackMedia,
-    url: firstParam(params.url) || fallbackMedia.url,
-    mimeType: firstParam(params.mimeType) || fallbackMedia.mimeType,
-    title: firstParam(params.title) || fallbackMedia.title,
-    description: firstParam(params.description) || fallbackMedia.description,
-    fileName: firstParam(params.fileName) || fallbackMedia.fileName,
+    url,
+    mimeType: firstParam(params.mimeType) || "application/octet-stream",
+    title: firstParam(params.title) || "Publicação",
+    description: firstParam(params.description) || "",
+    fileName: firstParam(params.fileName) || url.split("/").pop()?.split("?")[0] || "",
   };
 
   return (
@@ -77,28 +67,9 @@ export default async function Exibicao({ searchParams }: { searchParams: SearchP
         <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <div className="aspect-video overflow-hidden bg-black lg:min-h-[60vh] lg:aspect-auto"><MediaViewer media={media} /></div>
           <aside className="flex flex-col bg-panel p-3">
-            <h1 className="order-1 mt-2 text-xl font-semibold text-white">{media.title}</h1>
-            <div className="order-3 mt-4 flex items-center justify-between gap-3 lg:order-4 lg:mt-auto lg:border-t lg:border-white/10 lg:pt-3">
-              <button type="button" className="bg-panel-muted px-5 py-2 text-xl hover:bg-gold hover:text-navy">Seguir</button>
-              <ChannelInfo channelId="alberto-mielgo" name="Alberto Mielgo" title="Diretor e animador" avatar="https://i.pravatar.cc/160?img=12" />
-            </div>
-            <p className="order-2 mt-2 text-sm leading-tight text-cream/80 lg:order-3">{media.description}</p>
+            <h1 className="text-xl font-semibold text-white">{media.title}</h1>
+            <p className="mt-2 text-sm leading-tight text-cream/80">{media.description}</p>
           </aside>
-        </section>
-        <section className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div>
-            <h2 className="mb-2 text-sm">Outros de Alberto Mielgo</h2>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{related.map(([title, image, duration]) => <MediaCard key={title} title={title} image={image} duration={duration} />)}</div>
-            <h2 className="mb-2 mt-5 text-sm">Recomendações</h2>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{related.map(([title, image, duration]) => <MediaCard key={`${title}-recommendation`} title={title} image={image} duration={duration} />)}</div>
-          </div>
-          <div>
-            <h2 className="mb-2 text-sm">Avaliações</h2>
-            <section className="bg-panel" aria-label="Avaliações">
-              <div className="border-b border-white/10 p-3"><span className="text-2xl tracking-widest">☆☆☆☆☆</span><p className="mt-2 text-xs text-cream/70">MWWP720</p><p className="mt-3 text-xs">From the man who brought the amazing concept from Spider-Man into the wider verse.</p></div>
-              <div className="p-3"><span className="text-2xl tracking-widest">★★★★★</span><p className="mt-2 text-xs text-cream/70">hanaparkhill35565</p><p className="mt-3 text-xs">Alberto Mielgo is amazing. This short film is a beautiful experience.</p></div>
-            </section>
-          </div>
         </section>
       </main>
     </div>
