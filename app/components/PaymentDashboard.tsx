@@ -183,7 +183,7 @@ export default function PaymentDashboard() {
           <h3 className="mb-2 text-sm font-semibold text-white">Minhas monetizações</h3>
           {data.monetizacoes.length === 0
             ? <p className="text-xs text-cream/70">Você ainda não tem opções de monetização.</p>
-            : <div className="divide-y divide-white/10 border-y border-white/10">
+            : <div className="max-h-36 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
               {data.monetizacoes.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                 <div>
                   <p className="text-white">{item.titulo}</p>
@@ -198,7 +198,7 @@ export default function PaymentDashboard() {
           <h3 className="mb-2 text-sm font-semibold text-white">Assinaturas de catálogos</h3>
           {data.assinaturas.length === 0
             ? <p className="text-xs text-cream/70">Nenhuma assinatura ativa ou anterior.</p>
-            : <div className="divide-y divide-white/10 border-y border-white/10">
+            : <div className="max-h-36 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
               {data.assinaturas.map((subscription) => <div key={subscription.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
                 <div>
                   <p className="text-white">{money(subscription.preco)} / mês</p>
@@ -230,7 +230,7 @@ function TransactionList({ title, items, empty }: { title: string; items: Transa
     <h3 className="mb-2 text-sm font-semibold text-white">{title}</h3>
     {items.length === 0
       ? <p className="text-xs text-cream/70">{empty}</p>
-      : <div className="max-h-80 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
+      : <div className="max-h-36 divide-y divide-white/10 overflow-y-auto border-y border-white/10">
         {items.map((transaction) => <div key={transaction.id} className="py-2 text-xs">
           <div className="flex justify-between gap-3">
             <span className="text-cream">{typeLabel(transaction.tipo)} · {transaction.origem_tipo === "catalogo" ? "Catálogo" : "Publicação"}</span>
