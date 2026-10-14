@@ -18,7 +18,7 @@ type Publication = {
   descricao: string;
   miniatura: string;
   duracao: number;
-  monetizacoes: { label: string; price: string }[];
+  monetizacoes: { label: string; price: string; tipo?: string }[];
 };
 
 type Monetization = { tipo: string; preco: number; duracao?: number };
@@ -51,9 +51,9 @@ function toPublication(id: string, data: Record<string, unknown>, monetizacoes: 
     const price = item.preco === 0
       ? "R$0"
       : `R$${(item.preco / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-    if (item.tipo === "gratuito") return { label: "Acesso gratuito", price };
-    if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price };
-    return { label: "Download", price };
+    if (item.tipo === "gratuito") return { label: "Acesso gratuito", price, tipo: item.tipo };
+    if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price, tipo: item.tipo };
+    return { label: "Download", price, tipo: item.tipo };
   });
 
   return {
@@ -78,12 +78,12 @@ function formatDuration(seconds: number) {
 }
 
 function toAcquisitionOption(item: Monetization) {
-  if (item.tipo === "gratuito") return { label: "Acesso gratuito", price: "Grátis" };
+  if (item.tipo === "gratuito") return { label: "Acesso gratuito", price: "Grátis", tipo: item.tipo };
   const price = `R$${(item.preco / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-  if (item.tipo === "aluguel" && item.duracao === 7) return { label: "Alugue por 7 dias", price };
-  if (item.tipo === "assinatura" && item.duracao === 30) return { label: "Assine por 30 dias", price };
-  if (item.tipo === "compra") return { label: "Compre", price };
-  return { label: "Acesse", price };
+  if (item.tipo === "aluguel" && item.duracao === 7) return { label: "Alugue por 7 dias", price, tipo: item.tipo };
+  if (item.tipo === "assinatura" && item.duracao === 30) return { label: "Assine mensalmente", price, tipo: item.tipo };
+  if (item.tipo === "compra") return { label: "Compre", price, tipo: item.tipo };
+  return { label: "Acesse", price, tipo: item.tipo };
 }
 
 export default function CatalogDetail({ catalogId }: { catalogId: string }) {
@@ -440,7 +440,13 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           </div>
           <div className="border-t border-white/10 pt-4">
             <div className="catalog-acquisition-options">
-              <AcquisitionOptions direction="inline" options={catalog.monetizacoes.map(toAcquisitionOption)} />
+              <AcquisitionOptions
+                direction="inline"
+                options={catalog.monetizacoes.map(toAcquisitionOption)}
+                originType="catalogo"
+                originId={catalog.id}
+                ownerId={catalog.criador}
+              />
             </div>
           </div>
         </aside>}
