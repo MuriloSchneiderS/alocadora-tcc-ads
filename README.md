@@ -3,11 +3,12 @@ Plataforma de publicação de conteúdo (vídeos, arte, livros, arquivos diverso
 
 Protótipo de estrutura:
     Frontend: Next.js (React, TailwindCSS, TypeScript, Vite, React Query, Zustand);
-    Backend: Next.js API Routes;
-    Autenticação: Firebase Auth; (Google, Email/Senha...);
-    Banco de Dados: Firestore (Banco de Dados, url do storage), Cloud Storage(Armazenamento de arquivos);
-    Pagamentos: Abacate Pay; (checkout, Pix/cartão, assinaturas de catálogo...)
+    Backend: Next.js App Router/API Routes;
+    Autenticação: Firebase Auth; (Email/Senha...);
+    Banco de Dados: Firebase Firestore (Banco de Dados, url do storage) & Cloud Storage(Armazenamento de arquivos);
+    Pagamentos: Abacate Pay (sandbox); (checkout, Pix/cartão, assinaturas de catálogo...)
     Deploy: Vercel (Frontend e Backend);
+
 ## Estrutura do Banco de Dados
 ### Firestore:
     usuario/{usuarioId} (documento público do canal; o ID é o UID do Firebase Auth)
@@ -21,7 +22,7 @@ Protótipo de estrutura:
         - miniatura (url storage)
         - data_criacao (timestamp)
         - criador (usuarioId)
-        - publicacoes (array de publicacaoId e posicao no catalogo)
+        - publicacoes (array de publicacaoId e posicao no catalogo(id do array))
     catalogo/{catalogoId}/monetizacao/{monetizacaoId}
         - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias; assinatura mensal; compra perpétua)
         - preco (number)
@@ -70,9 +71,12 @@ Protótipo de estrutura:
 
 ### Storage:
     O fluxo de publicação envia os arquivos diretamente do navegador ao Firebase Storage. Os objetos ficam em:
-        publicacoes/arquivos/{usuarioId}/{publicacaoId}/{arquivo}
-        publicacoes/miniaturas/{usuarioId}/{publicacaoId}/{miniatura}
-    O campo publicacao.arquivo guarda o caminho do objeto, nunca uma URL com token de download. As miniaturas são cópias reduzidas e podem ser públicas.
+        publicacoes/arquivos/{usuarioId}/{publicacaoId}/{arquivo.ext}
+        publicacoes/miniaturas/{usuarioId}/{publicacaoId}/{miniatura.webp}
+        usuarios/{usuarioId}/{avatar.webp}
+    No Firestore o campo publicacao arquivo e miniatura guardam o caminho dos objetos no Storage. 
+    As miniaturas podem ser enviadas pelo usuário (convertida para webp e comprimida),
+    ou gerada automaticamente (primeiro frame/página/imagem).
 
 ## Backend
 ### API do Next.js
@@ -103,12 +107,16 @@ As gravações de pagamento e permissões usam Firebase Admin somente no servido
 
     1: Na página da publicação, o component AcquisitionOptions.tsx envia uma requisição autenticada para /api/payments/checkout.
 
-    2: O endpoint valida o usuário, a publicação ou catálogo, a monetização e o preço. Publicações antigas ou opções indisponíveis falham nessa etapa, antes de criar uma transação.
+    2: O endpoint valida o usuário, a publicação ou catálogo, a monetização e o preço. 
+    Publicações antigas ou opções indisponíveis falham nessa etapa, antes de criar uma transação.
 
-    3: lib/payment-products.ts procura ou provisiona o produto na Abacate Pay. O registro produto_gateway é um cache reutilizável que permanece no Firestore mesmo se a etapa seguinte falhar, mas não representa uma compra nem concede acesso.
+    3: lib/payment-products.ts procura ou provisiona o produto na Abacate Pay. 
+    O registro produto_gateway é um cache reutilizável que permanece no Firestore mesmo se a etapa seguinte falhar, mas não representa uma compra nem concede acesso.
 
-    4: A Abacate Pay cria o checkout. Agora, em api/payments/checkout/route.ts, o documento transacao só é criado depois que a criação do checkout retorna sucesso; ele já recebe o ID e a URL do checkout.
+    4: A Abacate Pay cria o checkout. Em api/payments/checkout/route.ts, o documento transacao só é criado depois que a criação do checkout retorna sucesso; ele já recebe o ID e a URL do checkout.
     
-    5: O endpoint devolve a URL e o navegador redireciona o comprador. Se a criação do checkout falhar, não é criado um documento transacao.
+    5: O endpoint devolve a URL e o navegador redireciona o comprador. 
+    Se a criação do checkout falhar, não é criado um documento transacao.
     
-    6: Depois do pagamento, o webhook valida a assinatura, evita processar o mesmo evento duas vezes e localiza a transação. Em pagamento confirmado, registra o acesso em acesso e marca a transação como pago; aluguel expira conforme a duração. Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
+    6: Depois do pagamento, o webhook valida a assinatura, evita processar o mesmo evento duas vezes e localiza a transação. 
+    Em pagamento confirmado, registra o acesso em acesso e marca a transação como pago; aluguel expira conforme a duração. Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
