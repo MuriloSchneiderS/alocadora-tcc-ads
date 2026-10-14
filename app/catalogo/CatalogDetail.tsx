@@ -9,6 +9,7 @@ import Header from "../components/Header";
 import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
 import MediaCard from "../components/MediaCard";
+import Reviews from "../components/Reviews";
 import { useAuth } from "../providers";
 import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 
@@ -31,6 +32,7 @@ type Catalog = {
   criador: string;
   publicacoes: string[];
   monetizacoes: Monetization[];
+  avaliacao: number;
 };
 
 type LoadedCatalog = {
@@ -133,6 +135,7 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           criador: String(data.criador ?? ""),
           publicacoes: ids,
           monetizacoes,
+          avaliacao: Number(data.avaliacao ?? 0),
         };
         const available = ownPublicationSnapshots
           ? await Promise.all(ownPublicationSnapshots.docs
@@ -409,7 +412,8 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
           }
         </section>
 
-        {catalog && <aside className="flex flex-col gap-6 border border-white/10 bg-panel p-3 sm:p-5">
+        {catalog && <div className="flex min-w-0 flex-col gap-4">
+          <aside className="flex flex-col gap-6 border border-white/10 bg-panel p-3 sm:p-5">
           <div className="grid gap-5 sm:grid-cols-[minmax(150px,220px)_1fr]">
             <div>
               <div className="aspect-3/4 overflow-hidden border-2 border-orange bg-panel-muted">
@@ -449,7 +453,9 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
               />
             </div>
           </div>
-        </aside>}
+          </aside>
+          <Reviews targetType="catalog" targetId={catalog.id} initialAverage={catalog.avaliacao} />
+        </div>}
       </main>
     </div>
   );
