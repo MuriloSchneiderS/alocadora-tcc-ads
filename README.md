@@ -43,10 +43,17 @@ Protótipo de estrutura:
         - duracao (number, em segundos, caso seja video ou audio)
         - catalogos (array de catalogoId e posicao no catalogo) (catalogos em que está)
         - criador (usuarioId)
+        - avaliacao (media das avaliações, calculada pelo servidor)
     publicacao/{publicacaoId}/monetizacao/{monetizacaoId} (publicação pode ter gratuito, aluguel ou compra)
         - tipo (enum: aluguel, compra, gratuito) (aluguel 7 dias; compra perpétua e permite download)
         - preco (number)
         - ativo (boolean)
+    avaliacao/{avaliacaoId}
+        - usuario (usuarioId)
+        - publicacao (publicacaoId)
+        - nota (1-5 opcional)
+        - comentario (string)
+        - data_criacao (timestamp)
 
     acesso/{usuarioId}/publicacoes/{publicacaoId}
         - ativo (boolean, resumo calculado pelo servidor a partir das concessões)
