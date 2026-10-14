@@ -27,6 +27,7 @@ Protótipo de estrutura:
         - data_criacao (timestamp)
         - criador (usuarioId)
         - publicacoes (array de publicacaoId e posicao no catalogo(id do array))
+        - avaliacao (media das avaliações, calculada pelo servidor)
     catalogo/{catalogoId}/monetizacao/{monetizacaoId}
         - tipo (enum: aluguel, compra, assinatura, gratuito) (aluguel 7 dias; assinatura mensal; compra perpétua)
         - preco (number)
@@ -50,9 +51,10 @@ Protótipo de estrutura:
         - ativo (boolean)
     avaliacao/{avaliacaoId}
         - usuario (usuarioId)
-        - publicacao (publicacaoId)
-        - nota (1-5 opcional)
-        - comentario (string)
+        - publicacao (publicacaoId, quando a avaliação for de uma publicação; ausente para catálogo)
+        - catalogo (catalogoId, quando a avaliação for de um catálogo; ausente para publicação)
+        - nota (inteiro de 1 a 5)
+        - comentario (string, até 1000 caracteres)
         - data_criacao (timestamp)
 
     acesso/{usuarioId}/publicacoes/{publicacaoId}
