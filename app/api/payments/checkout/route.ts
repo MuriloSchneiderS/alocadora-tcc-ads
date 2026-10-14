@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const publicationIds = body.originType === "publicacao"
       ? [body.originId]
       : Array.isArray(item.publicacoes)
-        ? item.publicacoes.filter((id: any): id is string => typeof id === "string")
+        ? item.publicacoes.filter((id: unknown): id is string => typeof id === "string")
         : [];
     if (publicationIds.length === 0)
       return Response.json({ error: "empty-catalog" }, { status: 409 });
@@ -76,20 +76,6 @@ export async function POST(request: Request) {
     const description = String(item.descricao ?? "").trim();
     const transactionId = randomUUID();
     const transactionRef = database.collection("transacao").doc(transactionId);
-    await transactionRef.create({
-      comprador: authentication.user.uid,
-      vendedor: item.criador,
-      origem_tipo: body.originType,
-      origem_id: body.originId,
-      publicacoes: publicationIds,
-      tipo: body.tipo,
-      preco: Number(monetization.preco),
-      duracao: body.tipo === "compra" ? null : duration,
-      moeda: "BRL",
-      status: "pendente",
-      external_id: transactionId,
-      criado_em: new Date(),
-    });
 
     try {
       const productId = await ensureAbacateProduct(database, {
@@ -113,22 +99,27 @@ export async function POST(request: Request) {
         },
         subscription: body.tipo === "assinatura",
       });
-      await transactionRef.update({
+      await transactionRef.create({
+        comprador: authentication.user.uid,
+        vendedor: item.criador,
+        origem_tipo: body.originType,
+        origem_id: body.originId,
+        publicacoes: publicationIds,
+        tipo: body.tipo,
+        preco: Number(monetization.preco),
+        duracao: body.tipo === "compra" ? null : duration,
+        moeda: "BRL",
+        status: "pendente",
+        external_id: transactionId,
         checkout_id: checkout.id,
         checkout_url: checkout.url,
-        atualizado_em: new Date(),
+        criado_em: new Date(),
       });
       return Response.json({ checkoutUrl: checkout.url }, { status: 201 });
     } catch (error) {
       console.error("Payment checkout creation failed", {
         transactionId,
         error: error instanceof Error ? error.message : "unknown",
-      });
-      await transactionRef.update({
-        status: "erro_checkout",
-        atualizado_em: new Date(),
-      }).catch((updateError: any) => {
-        console.error("Failed to record checkout error", updateError);
       });
       return Response.json({
         error: error instanceof Error && error.message === "payment-product-provisioning"
