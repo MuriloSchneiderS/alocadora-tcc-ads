@@ -5,27 +5,27 @@ import { useAuth } from "../providers";
 
 type Transaction = {
   id: string;
-  comprador: string;
-  vendedor: string;
-  origem_tipo: string;
-  origem_id: string;
-  tipo: string;
-  preco: number;
-  status: string;
-  comprado_em: string | null;
-  expira_em: string | null;
-  criado_em: string | null;
+  comprador: string;// UID do usuário que comprou
+  vendedor: string;// UID do usuário que vendeu
+  origem_tipo: string;// "catalogo" | "publicacao"
+  origem_id: string;// ID do catálogo ou publicação
+  tipo: string;// "aluguel" | "compra" | "assinatura" | "gratuito"
+  preco: number;// preço em centavos
+  status: string;// "pendente" | "aguardando_assinatura" | "pago" | "erro_checkout" | "reembolsado" | "contestado" | "contestacao_perdida"
+  comprado_em: string | null;// data da compra, se houver
+  expira_em: string | null;// data de expiração do acesso, se houver
+  criado_em: string | null;// data de criação da transação
 };
 
 type Monetization = {
   id: string;
-  origem_tipo: string;
-  origem_id: string;
-  titulo: string;
-  tipo: string;
-  preco: number;
-  ativo: boolean;
-  duracao: number;
+  origem_tipo: string;// "catalogo" | "publicacao"
+  origem_id: string;// ID do catálogo ou publicação
+  titulo: string;// título do catálogo ou publicação
+  tipo: string;// "aluguel" | "compra" | "assinatura" | "gratuito"
+  preco: number;// preço em centavos
+  ativo: boolean;// se a monetização está ativa
+  duracao: number;// duração em dias, se aplicável
 };
 
 type Subscription = {

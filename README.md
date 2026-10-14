@@ -57,7 +57,14 @@ Protótipo de estrutura:
         - checkout_id (ID retornado pela Abacate Pay)
         - comprado_em e expira_em (quando aplicável)
     assinatura/{subscriptionId} (metadados internos, somente API autenticada)
-        - usuario, vendedor, catalogo, publicacoes, preco, ciclo, status, expira_em
+        - usuario
+        - vendedor 
+        - catalogo
+        - publicacoes
+        - preco
+        - ciclo
+        - status
+        - expira_em
     produto_gateway/{chave} e eventos_pagamento/{hashEvento}
         - cache de produtos/ciclos e controle idempotente de webhooks (somente servidor)
 
@@ -76,7 +83,7 @@ Protótipo de estrutura:
     - `lib/firebase-auth-server.ts` centraliza validação do ID token e obtenção do `uid`; cada endpoint protegido deve chamá-lo e usar o `uid` retornado, nunca um ID enviado no corpo.
     - `POST /api/content` reutiliza o autenticador e encaminha gravações ao Firestore REST com o token do usuário. As regras Firestore continuam autorizando cada gravação.
 
-    O projeto antes deste fluxo não utilizava Firebase Admin: as variáveis `NEXT_PUBLIC_FIREBASE_*` do `.env` configuram o SDK web e não concedem privilégios administrativos. Login e publicação padrão continuam usando o ID token do usuário e as regras do Firestore. Esta integração adiciona Firebase Admin somente no servidor para que checkout e webhooks gravem concessões e transações confiáveis; por isso, ela exige também uma credencial de conta de serviço, guardada em variáveis secretas locais/Vercel e nunca no navegador.
+    Firebase Admin: as variáveis `NEXT_PUBLIC_FIREBASE_*` do `.env` configuram o SDK web e não concedem privilégios administrativos. Login e publicação padrão usam o ID token do usuário e as regras do Firestore. Firebase Admin opera somente no servidor para que checkout e webhooks gravem concessões e transações confiáveis; por isso, ela exige também uma credencial de conta de serviço, guardada em variáveis secretas locais/Vercel.
 
     APIs protegidas usam `authenticateFirebaseRequest`, derivam o proprietário de `user.uid` e não aceitam UID enviado no corpo como prova de identidade. As regras negam escrita do cliente em concessões, transações, assinaturas, cache de produtos e eventos de webhook.
 

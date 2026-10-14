@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const publicationIds = body.originType === "publicacao"
       ? [body.originId]
       : Array.isArray(item.publicacoes)
-        ? item.publicacoes.filter((id): id is string => typeof id === "string")
+        ? item.publicacoes.filter((id: any): id is string => typeof id === "string")
         : [];
     if (publicationIds.length === 0)
       return Response.json({ error: "empty-catalog" }, { status: 409 });
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
       await transactionRef.update({
         status: "erro_checkout",
         atualizado_em: new Date(),
-      }).catch((updateError) => {
+      }).catch((updateError: any) => {
         console.error("Failed to record checkout error", updateError);
       });
       return Response.json({
