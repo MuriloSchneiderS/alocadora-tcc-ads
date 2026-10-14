@@ -25,6 +25,14 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
     && (value.tipo !== "assinatura" || value.originType === "catalogo");
 }
 
+function isHttpsUrl(value: string) {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const authentication = await authenticateFirebaseRequest(request);
   if (!authentication.ok)
@@ -76,6 +84,7 @@ export async function POST(request: Request) {
     const description = String(item.descricao ?? "").trim();
     const transactionId = randomUUID();
     const transactionRef = database.collection("transacao").doc(transactionId);
+    let stage = "product";
 
     try {
       const productId = await ensureAbacateProduct(database, {
@@ -86,6 +95,7 @@ export async function POST(request: Request) {
         description,
         price: Number(monetization.preco),
       });
+      stage = "checkout";
       const checkout = await createAbacateCheckout({
         productId,
         externalId: transactionId,
@@ -99,6 +109,10 @@ export async function POST(request: Request) {
         },
         subscription: body.tipo === "assinatura",
       });
+      if (!checkout.id || !isHttpsUrl(checkout.url))
+        throw new Error("invalid-checkout-response");
+
+      stage = "transaction";
       await transactionRef.create({
         comprador: authentication.user.uid,
         vendedor: item.criador,
@@ -119,6 +133,9 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error("Payment checkout creation failed", {
         transactionId,
+        stage,
+        providerStatus: error instanceof AbacatePayError ? error.status : undefined,
+        providerMessage: error instanceof AbacatePayError ? error.providerMessage : undefined,
         error: error instanceof Error ? error.message : "unknown",
       });
       return Response.json({
