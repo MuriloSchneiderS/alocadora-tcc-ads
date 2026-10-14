@@ -1,5 +1,8 @@
 # Alocadora-TCC-ADS
+Trabalho de Conclusão de Curso (TCC) do curso de Análise e Desenvolvimento de Sistemas (ADS) do Instituto Federal de Santa Catarina (IFSC).
 Plataforma de publicação de conteúdo (vídeos, arte, livros, arquivos diversos…), onde o conteúdo publicado pode ser alugável, comprável ou gratuito com anúncios. Pode ir desde uma biblioteca à um serviço de streaming pessoal a depender de como o criador quiser disponibilizar seu conteúdo.
+
+Disponível em: alocadora-tcc-ads.vercel.app
 
 Protótipo de estrutura:
     Frontend: Next.js (React, TailwindCSS, TypeScript, Vite, React Query, Zustand);
@@ -7,6 +10,7 @@ Protótipo de estrutura:
     Autenticação: Firebase Auth; (Email/Senha...);
     Banco de Dados: Firebase Firestore (Banco de Dados, url do storage) & Cloud Storage(Armazenamento de arquivos);
     Pagamentos: Abacate Pay (sandbox); (checkout, Pix/cartão, assinaturas de catálogo...)
+    Transcodificação de arquivos: FFmpeg (geração de miniaturas, conversão para formatos padronizados e compressão);
     Deploy: Vercel (Frontend e Backend);
 
 ## Estrutura do Banco de Dados
