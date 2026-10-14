@@ -9,6 +9,7 @@ import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
+import Reviews from "../components/Reviews";
 import VideoPlayer from "../components/VideoPlayer";
 import { useAuth } from "../providers";
 import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
@@ -24,6 +25,7 @@ type PublicationView = {
   channelName: string;
   channelTitle: string;
   channelAvatar: string;
+  avaliacao: number;
   monetizacoes: { label: string; price: string; tipo?: string }[];
 };
 
@@ -133,6 +135,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
             channelName: String(profile?.nome ?? "Criador"),
             channelTitle: String(profile?.titulo || DEFAULT_CHANNEL_TITLE),
             channelAvatar: String(profile?.avatar || DEFAULT_USER_AVATAR),
+            avaliacao: Number(data.avaliacao ?? 0),
             monetizacoes: toAcquisitionOptions(monetizationSnapshot.docs.map((item) => item.data())),
           });
           setMessage("");
@@ -254,7 +257,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
           </aside>
         </section>}
         {publication && <section className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div>
+          <div className="min-w-0">
             <h2 className="mb-2 text-sm">Outros de {publication.channelName}</h2>
             {creatorPublications.length > 0
               ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{relatedCards(creatorPublications)}</div>
@@ -264,14 +267,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
               ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{relatedCards(recommendations)}</div>
               : <p className="py-3 text-xs text-cream/70">{relatedMessage || "Nenhuma recomendação disponível."}</p>}
           </div>
-          <aside>
-            <h2 className="mb-2 text-sm">Avaliações</h2>
-            <section className="bg-panel" aria-label="Avaliações">
-              {/* Placeholder de avaliações, ainda não implementado*/}
-              <div className="border-b border-white/10 p-3"><span className="text-2xl tracking-widest">☆☆☆☆☆</span><p className="mt-2 text-xs text-cream/70">MWWP720</p><p className="mt-3 text-xs">From the man who brought the amazing concept from Spider-Man into the wider verse.</p></div>
-              <div className="p-3"><span className="text-2xl tracking-widest">★★★★★</span><p className="mt-2 text-xs text-cream/70">hanaparkhill35565</p><p className="mt-3 text-xs">Alberto Mielgo is amazing. This short film is a beautiful experience.</p></div>
-            </section>
-          </aside>
+          <Reviews targetType="publication" targetId={publicationId} initialAverage={publication.avaliacao} />
         </section>}
       </main>
     </div>
