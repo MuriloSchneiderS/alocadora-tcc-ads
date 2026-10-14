@@ -69,7 +69,8 @@ transacao/{transacaoId}
     - tipo (aluguel, compra ou assinatura)
     - preco (centavos), moeda (BRL), status
     - checkout_id (ID retornado pela Abacate Pay)
-    - comprado_em e expira_em (quando aplicável)
+    - comprado_em 
+    - expira_em (quando aplicável)
 assinatura/{subscriptionId} (metadados internos, somente API autenticada)
     - usuario
     - vendedor 
