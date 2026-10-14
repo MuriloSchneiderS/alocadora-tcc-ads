@@ -18,7 +18,11 @@ export type AbacateCheckout = {
 };
 
 export class AbacatePayError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly providerMessage?: string,
+  ) {
     super(message);
     this.name = "AbacatePayError";
   }
@@ -47,8 +51,15 @@ async function requestAbacatePay<T>(path: string, body: Record<string, unknown>)
   }
 
   if (!response.ok || !result?.success || !result.data) {
-    console.error("Abacate Pay request failed", { path, status: response.status });
-    throw new AbacatePayError(response.status || 502, "abacatepay-request-failed");
+    const providerMessage = typeof result?.error === "string"
+      ? result.error.slice(0, 300)
+      : undefined;
+    console.error("Abacate Pay request failed", {
+      path,
+      status: response.status,
+      providerMessage,
+    });
+    throw new AbacatePayError(response.status || 502, "abacatepay-request-failed", providerMessage);
   }
   return result.data;
 }
