@@ -62,7 +62,7 @@ Protótipo de estrutura:
         - catalogo
         - publicacoes
         - preco
-        - ciclo
+        - ciclo (mensal, trimestral, anual)
         - status
         - expira_em
     produto_gateway/{chave} e eventos_pagamento/{hashEvento}
@@ -97,4 +97,18 @@ O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate
 
 Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações e assinaturas; ao cancelar uma assinatura, o acesso continua até o fim do período pago.
 
-As gravações de pagamento e permissões usam Firebase Admin somente no servidor; suas credenciais administrativas não devem ser expostas ao navegador. Os pagamentos são recebidos pela plataforma, sem divisão automática de valores entre criadores.
+As gravações de pagamento e permissões usam Firebase Admin somente no servidor; suas credenciais administrativas não são expostas ao navegador. Os pagamentos são recebidos pela plataforma, sem divisão automática de valores entre criadores.
+
+#### Fluxo da aquisição
+
+    1: Na página da publicação, o component AcquisitionOptions.tsx envia uma requisição autenticada para /api/payments/checkout.
+
+    2: O endpoint valida o usuário, a publicação ou catálogo, a monetização e o preço. Publicações antigas ou opções indisponíveis falham nessa etapa, antes de criar uma transação.
+
+    3: lib/payment-products.ts procura ou provisiona o produto na Abacate Pay. O registro produto_gateway é um cache reutilizável que permanece no Firestore mesmo se a etapa seguinte falhar, mas não representa uma compra nem concede acesso.
+
+    4: A Abacate Pay cria o checkout. Agora, em api/payments/checkout/route.ts, o documento transacao só é criado depois que a criação do checkout retorna sucesso; ele já recebe o ID e a URL do checkout.
+    
+    5: O endpoint devolve a URL e o navegador redireciona o comprador. Se a criação do checkout falhar, não é criado um documento transacao.
+    
+    6: Depois do pagamento, o webhook valida a assinatura, evita processar o mesmo evento duas vezes e localiza a transação. Em pagamento confirmado, registra o acesso em acesso e marca a transação como pago; aluguel expira conforme a duração. Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
