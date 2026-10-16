@@ -9,7 +9,7 @@ import { db } from "../../lib/firebase";
 import { useAuth } from "../providers";
 
 const modelosMonetizacao: MonetizationModel[] = [
-	{ label: "Gratuito com anúncios", type: "gratuito", free: true },
+	{ label: "Gratuito", type: "gratuito", free: true },
 	{ label: "Aluguel semanal", type: "aluguel", duration: 7 },
 	{ label: "Assinatura mensal", type: "assinatura", duration: 30 },
 	{ label: "Compra avulsa", type: "compra" },
@@ -21,7 +21,7 @@ export default function PublicacaoCatalogo() {
 	const [titulo, setTitulo] = useState("");
 	const [descricao, setDescricao] = useState("");
 	const [monetizacoes, setMonetizacoes] = useState<MonetizationDraft[]>([
-		{ model: "Gratuito com anúncios", price: "" },
+		{ model: "Gratuito", price: "" },
 	]);
 	const [saving, setSaving] = useState(false);
 	const [editingId, setEditingId] = useState("");
@@ -59,7 +59,7 @@ export default function PublicacaoCatalogo() {
 					setEditingId(editCatalogId);
 					setTitulo(String(data.titulo ?? ""));
 					setDescricao(String(data.descricao ?? ""));
-					setMonetizacoes(drafts.length > 0 ? drafts : [{ model: "Gratuito com anúncios", price: "" }]);
+					setMonetizacoes(drafts.length > 0 ? drafts : [{ model: "Gratuito", price: "" }]);
 				}
 			} catch (caught) {
 				if (isCurrent) {
@@ -84,7 +84,7 @@ export default function PublicacaoCatalogo() {
 			setMessage("Informe o título do catálogo.");
 			return;
 		}
-		if (monetizacoes.some((item) => item.model !== "Gratuito com anúncios" && toCents(item.price) <= 0)) {
+		if (monetizacoes.some((item) => item.model !== "Gratuito" && toCents(item.price) <= 0)) {
 			setError(true);
 			setMessage("Informe um preço maior que zero para cada opção paga.");
 			return;

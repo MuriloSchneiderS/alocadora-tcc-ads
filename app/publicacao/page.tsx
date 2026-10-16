@@ -12,7 +12,7 @@ import { createAutomaticThumbnail, transcodePublicationFile } from "../../lib/tr
 import { useAuth } from "../providers";
 
 const modelosMonetizacao: MonetizationModel[] = [
-  { label: "Gratuito com anúncios", type: "gratuito", free: true },
+  { label: "Gratuito", type: "gratuito", free: true },
   { label: "Aluguel", type: "aluguel" },
   { label: "Compra avulsa", type: "compra" },
 ];
@@ -121,7 +121,7 @@ export default function Publicacao() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
   const [monetizacoes, setMonetizacoes] = useState<MonetizationDraft[]>([
-    { model: "Gratuito com anúncios", price: "" },
+    { model: "Gratuito", price: "" },
   ]);
   const [catalogos, setCatalogos] = useState([""]);
   const [catalogosDisponiveis, setCatalogosDisponiveis] = useState<CatalogOption[]>([]);
@@ -199,7 +199,7 @@ export default function Publicacao() {
         setTitulo(String(data.titulo ?? ""));
         setDescricao(String(data.descricao ?? ""));
         setCatalogos(Array.isArray(data.catalogos) && data.catalogos.length > 0 ? data.catalogos : [""]);
-        setMonetizacoes(loadedMonetizations.length > 0 ? loadedMonetizations : [{ model: "Gratuito com anúncios", price: "" }]);
+        setMonetizacoes(loadedMonetizations.length > 0 ? loadedMonetizations : [{ model: "Gratuito", price: "" }]);
         setExistingPublication({
           arquivo: String(data.arquivo ?? ""),
           miniatura: String(data.miniatura ?? ""),
@@ -235,7 +235,7 @@ export default function Publicacao() {
       return;
     }
     
-    if (monetizacoes.some((item) => item.model !== "Gratuito com anúncios" && toCents(item.price) <= 0)) {
+    if (monetizacoes.some((item) => item.model !== "Gratuito" && toCents(item.price) <= 0)) {
       setErro(true);
       setMensagem("Informe um preço maior que zero para cada opção paga.");
       return;

@@ -55,7 +55,7 @@ function toPublication(id: string, data: Record<string, unknown>, monetizacoes: 
       : `R$${(item.preco / 100).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
     if (item.tipo === "gratuito") return { label: "Acesso gratuito", price, tipo: item.tipo };
     if (item.tipo === "aluguel") return { label: `Alugue por ${item.duracao ?? 7} dias`, price, tipo: item.tipo };
-    return { label: "Download", price, tipo: item.tipo };
+    return { label: "Compre", price, tipo: item.tipo };
   });
 
   return {
