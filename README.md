@@ -9,7 +9,7 @@ Protótipo de estrutura:
     Backend: Next.js App Router/API Routes;
     Autenticação: Firebase Auth; (Email/Senha...);
     Banco de Dados: Firebase Firestore (Banco de Dados, url do storage) & Cloud Storage(Armazenamento de arquivos);
-    Pagamentos: Abacate Pay (sandbox); (checkout, Pix/cartão, assinaturas de catálogo...)
+    Pagamentos: Abacate Pay (sandbox); (PIX para compras e aluguéis, cartão para assinaturas de catálogo...)
     Transcodificação de arquivos: FFmpeg (geração de miniaturas, conversão para formatos padronizados e compressão);
     Deploy: Vercel (Frontend e Backend);
 
@@ -111,7 +111,7 @@ APIs protegidas usam 'authenticateFirebaseRequest', derivam o proprietário de '
 
 ### Pagamentos
 
-O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate Pay. O servidor confirma o preço no Firestore e, após receber um webhook válido de pagamento, registra a transação e libera o acesso.
+O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate Pay. Compras e aluguéis avulsos usam PIX; assinaturas mensais de catálogo usam cartão. O servidor confirma o preço no Firestore e, após receber um webhook válido de pagamento, registra a transação e libera o acesso.
 
 Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações e assinaturas; ao cancelar uma assinatura, o acesso continua até o fim do período pago.
 

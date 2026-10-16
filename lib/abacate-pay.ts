@@ -92,7 +92,7 @@ export function createAbacateCheckout(input: {
       externalId: input.externalId,
       returnUrl: input.returnUrl,
       completionUrl: input.completionUrl,
-      methods: input.subscription ? ["CARD"] : ["PIX", "CARD"],
+      methods: input.subscription ? ["CARD"] : ["PIX"],
       metadata: input.metadata,
     },
   );
