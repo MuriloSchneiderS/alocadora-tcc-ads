@@ -125,21 +125,27 @@ As gravações de pagamento e permissões usam Firebase Admin somente no servido
 
 #### Fluxo da aquisição
 
-    1: Na página da publicação, o component AcquisitionOptions.tsx envia uma requisição autenticada para /api/payments/checkout.
+    1: Na página da publicação, o component AcquisitionOptions.tsx envia uma requisição autenticada para 
+    /api/payments/checkout.
 
     2: O endpoint valida o usuário, a publicação ou catálogo, a monetização e o preço. 
     Publicações antigas ou opções indisponíveis falham nessa etapa, antes de criar uma transação.
 
     3: lib/payment-products.ts procura ou provisiona o produto na Abacate Pay. 
-    O registro produto_gateway é um cache reutilizável que permanece no Firestore mesmo se a etapa seguinte falhar, mas não representa uma compra nem concede acesso.
+    O registro produto_gateway é um cache reutilizável que permanece no Firestore 
+    mesmo se a etapa seguinte falhar, mas não representa uma compra nem concede acesso.
 
-    4: A Abacate Pay cria o checkout. Em api/payments/checkout/route.ts, o documento transacao só é criado depois que a criação do checkout retorna sucesso; ele já recebe o ID e a URL do checkout.
+    4: A Abacate Pay cria o checkout. Em api/payments/checkout/route.ts, 
+    o documento transacao só é criado depois que a criação do checkout retorna sucesso; 
+    ele já recebe o ID e a URL do checkout.
 
     5: O endpoint devolve a URL e o navegador redireciona o comprador. 
     Se a criação do checkout falhar, não é criado um documento transacao.
 
     6: Depois do pagamento, o webhook valida a assinatura, evita processar o mesmo evento duas vezes e localiza a transação. 
-    Em pagamento confirmado, registra o acesso em acesso e marca a transação como pago; aluguel expira conforme a duração. Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
+    Em pagamento confirmado, registra o acesso em acesso e marca a transação como pago; 
+    aluguel expira conforme a duração. 
+    Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
 
 ### Avaliações
 
@@ -147,17 +153,30 @@ As avaliações de publicações e catálogos são armazenadas na coleção glob
 
 #### Fluxo da avaliação
 
-    1: O componente Reviews.tsx solicita 'GET /api/ratings/{targetType}/{targetId}' para carregar a média, a quantidade de avaliações, as 20 avaliações mais recentes e, quando há sessão autenticada, a avaliação do próprio usuário.
+    1: O componente Reviews.tsx solicita 'GET /api/ratings/{targetType}/{targetId}' 
+    para carregar a média, a quantidade de avaliações, as 20 avaliações mais recentes e, quando há sessão autenticada, a avaliação do próprio usuário.
 
-    2: 'targetType' aceita 'publication' ou 'catalog'. A API consulta 'avaliacao' pelo campo correspondente ('publicacao' ou 'catalogo') e lê a média armazenada no documento-alvo. Se ainda não houver média persistida, calcula uma média de contingência a partir das notas válidas.
+    2: 'targetType' aceita 'publication' ou 'catalog'. A API consulta 'avaliacao' pelo campo 
+    correspondente ('publicacao' ou 'catalogo') e lê a média armazenada no documento-alvo. 
+    Se ainda não houver média persistida, calcula uma média de contingência a partir das notas válidas.
 
-    3: Para publicar ou atualizar uma avaliação, o cliente envia 'POST' para o mesmo caminho, com o ID token Firebase no cabeçalho Bearer e um corpo contendo 'rating' (inteiro de 1 a 5) e 'comment' (até 1000 caracteres). O servidor deriva 'usuario' do token, não aceita um UID fornecido pelo cliente.
+    3: Para publicar ou atualizar uma avaliação, o cliente envia 'POST' para o mesmo caminho, 
+    com o ID token Firebase no cabeçalho Bearer e um corpo contendo 'rating' (inteiro de 1 a 5) e 
+    'comment' (até 1000 caracteres). O servidor deriva 'usuario' do token, 
+    não aceita um UID fornecido pelo cliente.
 
-    4: O servidor cria uma transação Firestore, confirma que o conteúdo existe e consulta as avaliações daquele conteúdo. Soma as notas válidas, exclui a nota anterior do usuário que está avaliando novamente e inclui a nova nota. A média é arredondada para uma casa decimal.
+    4: O servidor cria uma transação Firestore, confirma que o conteúdo existe e 
+    consulta as avaliações daquele conteúdo. 
+    Soma as notas válidas, exclui a nota anterior do usuário que está avaliando novamente e inclui a nova nota. 
+    A média é arredondada para uma casa decimal.
 
-    5: Na mesma transação, a API grava ou atualiza 'avaliacao/{avaliacaoId}' e atualiza 'publicacao/{publicacaoId}.avaliacao' ou 'catalogo/{catalogoId}.avaliacao'. Assim, alterar a própria avaliação substitui a nota e o comentário anteriores em vez de criar uma segunda avaliação.
+    5: Na mesma transação, a API grava ou atualiza 'avaliacao/{avaliacaoId}' e atualiza 
+    'publicacao/{publicacaoId}.avaliacao' ou 'catalogo/{catalogoId}.avaliacao'. 
+    Assim, alterar a própria avaliação substitui a nota e o comentário anteriores em vez de criar uma segunda avaliação.
 
-    6: A interface atualiza a lista e exibe estrelas fracionadas com base na média. Por exemplo, '4.5' é mostrado como quatro estrelas e meia. Com zero avaliações, a média exibida é zero e nenhum valor médio precisa ser persistido.
+    6: A interface atualiza a lista e exibe estrelas fracionadas com base na média. 
+    Por exemplo, '4.5' é mostrado como quatro estrelas e meia. 
+    Com zero avaliações, a média exibida é zero e nenhum valor médio precisa ser persistido.
 
 Os documentos de publicação mantêm o formato de ID já usado antes da unificação da API, para que as avaliações existentes continuem associadas ao mesmo usuário e publicação. Para catálogos, o ID também inclui o tipo do alvo, evitando colisões com avaliações de publicação. Os campos 'publicacao' e 'catalogo' são mutuamente exclusivos em cada documento de avaliação.
 
@@ -169,14 +188,28 @@ Utiliza índices de coleta do firestore.
 
 #### Fluxo da pesquisa e paginação
 
-    1: O hook reutilizável 'app/hooks/usePagedContent.ts' solicita 'GET /api/search', enviando o termo 'q', o cursor da página e, na página de canal, o parâmetro 'channelId'. O hook também controla carregamento, erros e a ação do botão **Carregar mais**.
+    1: O hook reutilizável 'app/hooks/usePagedContent.ts' solicita 'GET /api/search', enviando o termo 'q', 
+    o cursor da página e, na página de canal, o parâmetro 'channelId'. 
+    O hook também controla carregamento, erros e a ação do botão **Carregar mais**.
 
-    2: A rota 'app/api/search/route.ts' consulta as coleções Firestore 'publicacao' e 'catalogo'. Quando há termo de pesquisa fora do contexto de um canal, também consulta 'usuario' para localizar canais. Os textos são comparados sem diferenciar maiúsculas/minúsculas nem acentos.
+    2: A rota 'app/api/search/route.ts' consulta as coleções Firestore 'publicacao' e 'catalogo'. 
+    Quando há termo de pesquisa fora do contexto de um canal, também consulta 'usuario' para localizar canais. 
+    Os textos são comparados sem diferenciar maiúsculas/minúsculas nem acentos.
 
-    3: Cada coleção é consultada em páginas separadas, ordenadas pela data de criação (conteúdos) ou pelo nome (canais). O limite é de 12 documentos por coleção em cada chamada; um 13.º documento é lido apenas para detectar se existe próxima página. Assim, uma resposta pode conter até 36 documentos antes da filtragem textual (12 publicações, 12 catálogos e 12 canais). A busca por texto é aplicada aos documentos desse lote, não a toda a coleção de uma só vez.
+    3: Cada coleção é consultada em páginas separadas, ordenadas pela data de criação (conteúdos) ou pelo nome (canais). 
+    O limite é de 12 documentos por coleção em cada chamada; um 13.º documento é lido apenas para detectar se existe próxima página. Assim, uma resposta pode conter até 36 documentos antes da filtragem textual (12 publicações, 12 catálogos e 12 canais). 
+    A busca por texto é aplicada aos documentos desse lote, não a toda a coleção de uma só vez.
 
-    4: A rota inclui no cursor a última posição de cada coleção. Ao clicar **Carregar mais**, o hook envia esse cursor e a rota continua a partir dos documentos seguintes. O cursor só vale para o mesmo termo e canal. Pode haver páginas sem correspondências; enquanto alguma coleção tiver mais documentos, a interface mantém o botão para continuar a pesquisa.
+    4: A rota inclui no cursor a última posição de cada coleção. Ao clicar **Carregar mais**, 
+    o hook envia esse cursor e a rota continua a partir dos documentos seguintes. 
+    O cursor só vale para o mesmo termo e canal. Pode haver páginas sem correspondências; 
+    enquanto alguma coleção tiver mais documentos, a interface mantém o botão para continuar a pesquisa.
 
-    5: A página inicial 'app/page.tsx' e a página de canal 'app/canal/ChannelPage.tsx' usam o mesmo hook e endpoint. Na página de canal, a busca por título ou descrição é restrita pelo 'criador' correspondente ao 'channelId'; os filtros de publicações e catálogos também operam sobre os resultados paginados. O índice composto de 'firestore.indexes.json' atende essas consultas por criador e data e precisa estar publicado no Firebase.
+    5: A página inicial 'app/page.tsx' e a página de canal 'app/canal/ChannelPage.tsx' usam o mesmo hook e endpoint. 
+    Na página de canal, a busca por título ou descrição é restrita pelo 'criador' correspondente ao 'channelId'; 
+    os filtros de publicações e catálogos também operam sobre os resultados paginados. 
+    O índice composto de 'firestore.indexes.json' atende essas consultas por criador e data e precisa estar publicado no Firebase.
 
-    6: O endpoint usa 'getAdminFirestore()' de 'lib/firebase-admin.ts' no servidor. O Web SDK ('lib/firebase.ts') continua usando as variáveis 'NEXT_PUBLIC_FIREBASE_*' para as operações do navegador, mas essas variáveis não inicializam o Admin SDK. Localmente, o Admin pode usar uma conta de serviço por 'GOOGLE_APPLICATION_CREDENTIALS' apontando para o arquivo JSON, ou as variáveis 'FIREBASE_ADMIN_CLIENT_EMAIL' e 'FIREBASE_ADMIN_PRIVATE_KEY'.
+    6: O endpoint usa 'getAdminFirestore()' de 'lib/firebase-admin.ts' no servidor. 
+    O Web SDK ('lib/firebase.ts') continua usando as variáveis 'NEXT_PUBLIC_FIREBASE_*' para as operações do navegador, mas essas variáveis não inicializam o Admin SDK. 
+    Localmente, o Admin pode usar uma conta de serviço por 'GOOGLE_APPLICATION_CREDENTIALS' apontando para o arquivo JSON, ou as variáveis 'FIREBASE_ADMIN_CLIENT_EMAIL' e 'FIREBASE_ADMIN_PRIVATE_KEY'.
