@@ -22,9 +22,9 @@ export default function Header({ title, showSearch = true, showPublish = true }:
         {title && <h1 className="order-3 col-span-2 text-center text-lg font-bold uppercase tracking-tight sm:order-0 sm:flex-1">{title}</h1>}
 
         {showSearch && (
-          <form className="order-4 col-span-2 flex h-8 w-full sm:absolute sm:left-1/2 sm:order-0 sm:col-span-1 sm:w-[min(42rem,38vw)] sm:-translate-x-1/2" role="search">
+          <form action="/pesquisa" method="get" className="order-4 col-span-2 flex h-8 w-full sm:absolute sm:left-1/2 sm:order-0 sm:col-span-1 sm:w-[min(42rem,38vw)] sm:-translate-x-1/2" role="search">
             <label className="sr-only" htmlFor="site-search">Buscar vídeos</label>
-            <input id="site-search" type="search" placeholder="PESQUISAR" className="min-w-0 flex-1 border border-navy bg-panel px-3 py-2 text-xs text-white placeholder:text-cream/70" />
+            <input id="site-search" name="q" type="search" placeholder="PESQUISAR" className="min-w-0 flex-1 border border-navy bg-panel px-3 py-2 text-xs text-white placeholder:text-cream/70" />
             <button type="submit" className="w-12 bg-navy text-lg text-cream hover:bg-panel" aria-label="Buscar">⌕</button>
           </form>
         )}

@@ -18,7 +18,8 @@ export function getAdminFirestore(expectedProjectId?: string) {
         credential: cert({ projectId, clientEmail, privateKey }),
         projectId,
       });
-    } else if (process.env.FIREBASE_ADMIN_USE_APPLICATION_DEFAULT === "true") {
+    } else if (process.env.FIREBASE_ADMIN_USE_APPLICATION_DEFAULT === "true"
+      || Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
       initializeApp({ credential: applicationDefault(), projectId });
     } else {
       throw new Error("firebase-admin-credentials-missing");

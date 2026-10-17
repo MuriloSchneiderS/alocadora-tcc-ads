@@ -14,6 +14,10 @@ Protótipo de estrutura:
     Deploy: Vercel (Frontend e Backend);
 
 ## Estrutura do Banco de Dados
+### Indices
+storageReservations: status, expiresAt, __name__ 
+publicacao: criador, data_criacao, __name__ 
+catalogo: criador, data_criacao, __name__
 ### Firestore:
 usuario/{usuarioId} (documento público do canal; o ID é o UID do Firebase Auth)
     - nome (string)
@@ -154,3 +158,23 @@ As avaliações de publicações e catálogos são armazenadas na coleção glob
     6: A interface atualiza a lista e exibe estrelas fracionadas com base na média. Por exemplo, '4.5' é mostrado como quatro estrelas e meia. Com zero avaliações, a média exibida é zero e nenhum valor médio precisa ser persistido.
 
 Os documentos de publicação mantêm o formato de ID já usado antes da unificação da API, para que as avaliações existentes continuem associadas ao mesmo usuário e publicação. Para catálogos, o ID também inclui o tipo do alvo, evitando colisões com avaliações de publicação. Os campos 'publicacao' e 'catalogo' são mutuamente exclusivos em cada documento de avaliação.
+
+### Pesquisa
+
+A barra de pesquisa do componente 'Header.tsx' envia o termo como parâmetro 'q' para '/pesquisa'. A página 'app/pesquisa/page.tsx' lê esse parâmetro e o repassa ao componente 'app/pesquisa/SearchResults.tsx', que exibe as abas **Tudo**, **Publicações**, **Catálogos** e **Canais**. As abas filtram os resultados já carregados no navegador; **Carregar mais** busca a próxima página.
+
+Utiliza índices de coleta do firestore.
+
+#### Fluxo da pesquisa e paginação
+
+    1: O hook reutilizável 'app/hooks/usePagedContent.ts' solicita 'GET /api/search', enviando o termo 'q', o cursor da página e, na página de canal, o parâmetro 'channelId'. O hook também controla carregamento, erros e a ação do botão **Carregar mais**.
+
+    2: A rota 'app/api/search/route.ts' consulta as coleções Firestore 'publicacao' e 'catalogo'. Quando há termo de pesquisa fora do contexto de um canal, também consulta 'usuario' para localizar canais. Os textos são comparados sem diferenciar maiúsculas/minúsculas nem acentos.
+
+    3: Cada coleção é consultada em páginas separadas, ordenadas pela data de criação (conteúdos) ou pelo nome (canais). O limite é de 12 documentos por coleção em cada chamada; um 13.º documento é lido apenas para detectar se existe próxima página. Assim, uma resposta pode conter até 36 documentos antes da filtragem textual (12 publicações, 12 catálogos e 12 canais). A busca por texto é aplicada aos documentos desse lote, não a toda a coleção de uma só vez.
+
+    4: A rota inclui no cursor a última posição de cada coleção. Ao clicar **Carregar mais**, o hook envia esse cursor e a rota continua a partir dos documentos seguintes. O cursor só vale para o mesmo termo e canal. Pode haver páginas sem correspondências; enquanto alguma coleção tiver mais documentos, a interface mantém o botão para continuar a pesquisa.
+
+    5: A página inicial 'app/page.tsx' e a página de canal 'app/canal/ChannelPage.tsx' usam o mesmo hook e endpoint. Na página de canal, a busca por título ou descrição é restrita pelo 'criador' correspondente ao 'channelId'; os filtros de publicações e catálogos também operam sobre os resultados paginados. O índice composto de 'firestore.indexes.json' atende essas consultas por criador e data e precisa estar publicado no Firebase.
+
+    6: O endpoint usa 'getAdminFirestore()' de 'lib/firebase-admin.ts' no servidor. O Web SDK ('lib/firebase.ts') continua usando as variáveis 'NEXT_PUBLIC_FIREBASE_*' para as operações do navegador, mas essas variáveis não inicializam o Admin SDK. Localmente, o Admin pode usar uma conta de serviço por 'GOOGLE_APPLICATION_CREDENTIALS' apontando para o arquivo JSON, ou as variáveis 'FIREBASE_ADMIN_CLIENT_EMAIL' e 'FIREBASE_ADMIN_PRIVATE_KEY'.
