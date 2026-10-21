@@ -147,6 +147,14 @@ As gravações de pagamento e permissões usam Firebase Admin somente no servido
     aluguel expira conforme a duração. 
     Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
 
+    7: O painel de controle do usuário lista compras, vendas, monetizações e assinaturas.
+    O usuário pode cancelar a assinatura, mas o acesso continua até o fim do período já pago.
+
+    8: Botões de monetização refletem a aquisição: 
+    aluguel ativo impede outro aluguel, assinatura ativa impede assinar ou alugar, 
+    e compra ativa mostra “Comprado”, desabilita as modalidades e permite download. 
+    Publicações baixam o próprio arquivo; catálogos baixam os arquivos em um ZIP. 
+
 ### Avaliações
 
 As avaliações de publicações e catálogos são armazenadas na coleção global 'avaliacao'. Cada usuário pode manter uma nota de 1 a 5 e um comentário por conteúdo. O usuário não grava nessa coleção nem altera a média diretamente: a API valida a identidade e os dados e usa Firebase Admin no servidor para salvar a avaliação e atualizar o campo 'avaliacao' do documento de publicação ou catálogo.<br />

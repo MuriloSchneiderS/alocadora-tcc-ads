@@ -1,15 +1,18 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { getBytes, ref } from "firebase/storage";
+import { zipSync } from "fflate";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "../../lib/firebase";
+import { db, storage } from "../../lib/firebase";
 import Header from "../components/Header";
 import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
 import MediaCard from "../components/MediaCard";
 import Reviews from "../components/Reviews";
+import { useAcquisitionState } from "../hooks/useAcquisitionState";
 import { useAuth } from "../providers";
 import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 
@@ -19,6 +22,8 @@ type Publication = {
   descricao: string;
   miniatura: string;
   duracao: number;
+  arquivo: string;
+  tamanho: number;
   monetizacoes: { label: string; price: string; tipo?: string }[];
 };
 
@@ -48,6 +53,7 @@ type LoadedCatalog = {
 
 const emptyThumbnail = "/assets/catalogo_vazio.png";
 
+//converte os dados do Firestore em um objeto Publication, incluindo as monetizações
 function toPublication(id: string, data: Record<string, unknown>, monetizacoes: Monetization[]): Publication {
   const acquisitions = monetizacoes.map((item) => {
     const price = item.preco === 0
@@ -64,10 +70,19 @@ function toPublication(id: string, data: Record<string, unknown>, monetizacoes: 
     descricao: String(data.descricao ?? ""),
     miniatura: String(data.miniatura || emptyThumbnail),
     duracao: Number(data.duracao ?? 0),
+    arquivo: String(data.arquivo ?? ""),
+    tamanho: Number(data.tamanho ?? 0),
     monetizacoes: acquisitions,
   };
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+}
+function safeFileName(value: string) {
+  return value.replace(/[\\/:*?"<>|]/g, "-").trim() || "publicacao";
+}
 function formatDuration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
   const totalSeconds = Math.floor(seconds);
@@ -91,6 +106,7 @@ function toAcquisitionOption(item: Monetization) {
 export default function CatalogDetail({ catalogId }: { catalogId: string }) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
+  const { acquisitionState, isAcquisitionLoading } = useAcquisitionState("catalogo", catalogId);
   const [loaded, setLoaded] = useState<LoadedCatalog | null>(null);
   const [selectedPublication, setSelectedPublication] = useState("");
   const [saving, setSaving] = useState(false);
@@ -98,8 +114,40 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
   const [error, setError] = useState(false);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
   const [catalogMenuOpen, setCatalogMenuOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState("");
   const draggingId = useRef<string | null>(null);
   const originalOrder = useRef<Publication[] | null>(null);
+
+  async function downloadCatalog() {
+    if (!loaded?.catalog || acquisitionState !== "purchased" || isDownloading) return;
+    const totalSize = items.reduce((total, publication) => total + publication.tamanho, 0);
+    const catalogName = safeFileName(loaded.catalog.titulo);
+    //confirma com o usuário se ele deseja continuar com o download, informando a quantidade de arquivos e o tamanho total antes da compactação
+    if (!window.confirm(`O download de "${loaded.catalog.titulo}" inclui ${items.length} arquivos, com tamanho total de ${formatFileSize(totalSize)} antes da compactação. Deseja continuar?`)) return;
+
+    setIsDownloading(true);
+    setDownloadMessage("");
+    try {
+      const entries = await Promise.all(items.map(async (publication) => {
+        const bytes = await getBytes(ref(storage, publication.arquivo));
+        const extension = publication.arquivo.split(".").pop()?.toLowerCase() || "bin";
+        const filename = `${catalogName}/${safeFileName(publication.titulo)}-${publication.id.slice(0, 8)}.${extension}`;
+        return [filename, new Uint8Array(bytes)] as const;
+      }));
+      const archive = zipSync(Object.fromEntries(entries), { level: 6 });
+      const url = URL.createObjectURL(new Blob([new Uint8Array(archive).buffer], { type: "application/zip" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${catalogName}.zip`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setDownloadMessage("Não foi possível baixar todos os arquivos. Verifique sua conexão e o acesso ao catálogo e tente novamente.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
 
   useEffect(() => {
     let isCurrent = true;
@@ -450,7 +498,12 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
                 originType="catalogo"
                 originId={catalog.id}
                 ownerId={catalog.criador}
+                acquisitionState={acquisitionState}
+                isAcquisitionLoading={isAcquisitionLoading}
+                onDownload={() => void downloadCatalog()}
+                isDownloading={isDownloading}
               />
+              {downloadMessage && <p className="mt-2 text-xs text-red" role="alert">{downloadMessage}</p>}
             </div>
           </div>
           </aside>
