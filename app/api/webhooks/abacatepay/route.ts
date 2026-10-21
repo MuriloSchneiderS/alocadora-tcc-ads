@@ -37,6 +37,7 @@ function eventDate(event: EventPayload) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+//verifica a assinatura do webhook da AbacatePay, para garantir que o evento recebido é legítimo e não foi alterado por terceiros
 function verifySignature(rawBody: string, signature: string) {
   const expected = createHmac("sha256", abacatePayPublicKey)
     .update(Buffer.from(rawBody, "utf8"))
@@ -62,7 +63,10 @@ async function findTransaction(database: FirebaseFirestore.Firestore, externalId
   return null;
 }
 
+//atualiza o status da transação, concede ou revoga o acesso às publicações compradas e atualiza a assinatura do usuário caso seja uma transação de assinatura
 async function grantTransaction(database: FirebaseFirestore.Firestore, transactionId: string, transactionData: FirebaseFirestore.DocumentData, grantId: string, expiresAt: Date | null, paidAt: Date, subscriptionId?: string) {
+  const grossAmount = Number(transactionData.preco ?? 0);
+  const platformFee = Math.round(grossAmount * 0.1);
   const publicationIds = Array.isArray(transactionData.publicacoes)
     ? transactionData.publicacoes.filter((id): id is string => typeof id === "string")
     : [];
@@ -80,12 +84,15 @@ async function grantTransaction(database: FirebaseFirestore.Firestore, transacti
   }
   await database.collection("transacao").doc(transactionId).update({
     status: "pago",
+    taxa_plataforma: platformFee,
+    valor_criador: grossAmount - platformFee,
     comprado_em: Timestamp.fromDate(paidAt),
     expira_em: expiresAt ? Timestamp.fromDate(expiresAt) : null,
     atualizado_em: FieldValue.serverTimestamp(),
   });
 }
 
+//revoga o acesso às publicações compradas e atualiza o status da transação, caso seja uma transação de assinatura, também atualiza o status da assinatura do usuário
 async function revokeTransaction(database: FirebaseFirestore.Firestore, transactionId: string, transactionData: FirebaseFirestore.DocumentData, status: string) {
   const publicationIds = Array.isArray(transactionData.publicacoes)
     ? transactionData.publicacoes.filter((id): id is string => typeof id === "string")
@@ -141,6 +148,7 @@ async function revokeTransaction(database: FirebaseFirestore.Firestore, transact
   });
 }
 
+//processa o evento recebido do webhook da AbacatePay, atualizando o status da transação, concedendo ou revogando o acesso às publicações compradas e atualizando a assinatura do usuário caso seja uma transação de assinatura
 async function processEvent(database: FirebaseFirestore.Firestore, event: EventPayload) {
   const nested = isRecord(event.data.subscription) ? event.data.subscription : {};
   const checkout = isRecord(event.data.checkout) ? event.data.checkout : {};
@@ -216,6 +224,8 @@ async function processEvent(database: FirebaseFirestore.Firestore, event: EventP
       publicacoes: subscription.publicacoes,
       tipo: "assinatura",
       preco: subscription.preco,
+      taxa_plataforma: Math.round(Number(subscription.preco ?? 0) * 0.1),
+      valor_criador: Number(subscription.preco ?? 0) - Math.round(Number(subscription.preco ?? 0) * 0.1),
       moeda: "BRL",
       status: "pago",
       assinatura_id: subscriptionId,
