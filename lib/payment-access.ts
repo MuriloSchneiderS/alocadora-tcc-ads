@@ -16,6 +16,55 @@ export type AccessGrant = {
   subscriptionId?: string;
 };
 
+export type AcquisitionState = "purchased" | "rented" | "subscribed" | null;
+
+//verifica se a concessão de acesso está ativa, considerando a data atual
+function isGrantActive(grant: FirebaseFirestore.DocumentData, now: Date) {
+  if (grant.ativo !== true) 
+    return false;
+  const expiry = grant.expira_em;//se a concessão não expira, ela é considerada ativa
+  if (expiry == null) 
+    return grant.tipo === "compra";//acesso perpétuo não expira, mas aluguel e assinatura expiram
+  const expiryDate = expiry instanceof Timestamp ? expiry.toDate() : expiry instanceof Date ? expiry : null;
+  return Boolean(expiryDate && expiryDate > now);
+}
+
+//retorna o estado de aquisição do usuário para a publicação/catalogo especificada
+export async function getPublicationAcquisitionState(
+  database: Firestore,
+  userId: string,
+  publicationId: string,
+  originType?: string,
+  originId?: string,
+): Promise<AcquisitionState> {
+  const grants = await database.collection("acesso").doc(userId)
+    .collection("publicacoes").doc(publicationId).collection("fontes").get();
+  const activeGrants = grants.docs.map((item) => item.data()).filter((grant) =>
+    isGrantActive(grant, new Date())
+      && (!originType || grant.origem_tipo === originType)
+      && (!originId || grant.origem_id === originId),
+  );
+  if (activeGrants.some((grant) => grant.tipo === "compra")) return "purchased";
+  if (activeGrants.some((grant) => grant.tipo === "assinatura")) return "subscribed";
+  if (activeGrants.some((grant) => grant.tipo === "aluguel")) return "rented";
+  return null;
+}
+export async function getCatalogAcquisitionState(
+  database: Firestore,
+  userId: string,
+  catalogId: string,
+  publicationIds: string[],
+): Promise<AcquisitionState> {
+  const states = await Promise.all(publicationIds.map((publicationId) =>
+    getPublicationAcquisitionState(database, userId, publicationId, "catalogo", catalogId),
+  ));
+  if (states.includes("purchased")) return "purchased";
+  if (states.includes("subscribed")) return "subscribed";
+  if (states.includes("rented")) return "rented";
+  return null;
+}
+
+//atualiza o estado de aquisição do usuário para a publicação especificada, considerando a concessão de acesso fornecida
 export async function updatePublicationEntitlement(
   database: Firestore,
   userId: string,

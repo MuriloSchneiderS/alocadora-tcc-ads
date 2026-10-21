@@ -3,6 +3,7 @@ import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
 import { createAbacateCheckout, AbacatePayError } from "@/lib/abacate-pay";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { ensureAbacateProduct } from "@/lib/payment-products";
+import { getCatalogAcquisitionState, getPublicationAcquisitionState } from "@/lib/payment-access";
 
 export const runtime = "nodejs";
 
@@ -12,10 +13,11 @@ type CheckoutRequest = {
   tipo: "aluguel" | "compra" | "assinatura";
 };
 
+//checa se o valor é um UUID válido
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
+//checa se o valor é uma requisição de checkout válida
 function isCheckoutRequest(value: unknown): value is CheckoutRequest {
   return isRecord(value)
     && (value.originType === "publicacao" || value.originType === "catalogo")
@@ -24,7 +26,7 @@ function isCheckoutRequest(value: unknown): value is CheckoutRequest {
     && (value.tipo === "aluguel" || value.tipo === "compra" || value.tipo === "assinatura")
     && (value.tipo !== "assinatura" || value.originType === "catalogo");
 }
-
+//checa se o valor é uma URL HTTPS válida
 function isHttpsUrl(value: string) {
   try {
     return new URL(value).protocol === "https:";
@@ -48,16 +50,19 @@ export async function POST(request: Request) {
 
   try {
     const database = getAdminFirestore(authentication.user.projectId);
+    //verifica se a publicação ou catálogo existe e se a monetização do tipo solicitado está ativa
     const itemRef = database.collection(body.originType).doc(body.originId);
     const [itemSnapshot, monetizationSnapshot] = await Promise.all([
       itemRef.get(),
-      itemRef.collection("monetizacao").doc(body.tipo).get(),
+      itemRef.collection("monetizacao").doc(body.tipo).get(),//monetização do tipo solicitado (aluguel, compra ou assinatura) para a publicação ou catálogo
     ]);
     if (!itemSnapshot.exists || !monetizationSnapshot.exists)
       return Response.json({ error: "monetization-not-found" }, { status: 404 });
 
-    const item = itemSnapshot.data() ?? {};
-    const monetization = monetizationSnapshot.data() ?? {};
+    const item = itemSnapshot.data() ?? {};//dados da publicação ou catálogo
+    const monetization = monetizationSnapshot.data() ?? {};//dados da monetização do tipo solicitado
+    
+    //testes de validação da monetização e do usuário
     if (typeof item.criador !== "string" || !item.criador)
       return Response.json({ error: "invalid-monetization-owner" }, { status: 409 });
     if (item.criador === authentication.user.uid)
@@ -71,7 +76,6 @@ export async function POST(request: Request) {
       return Response.json({ error: "monetization-unavailable" }, { status: 409 });
     if (body.tipo === "assinatura" && duration !== 30)
       return Response.json({ error: "subscription-cycle-unavailable" }, { status: 409 });
-
     const publicationIds = body.originType === "publicacao"
       ? [body.originId]
       : Array.isArray(item.publicacoes)
@@ -80,8 +84,19 @@ export async function POST(request: Request) {
     if (publicationIds.length === 0)
       return Response.json({ error: "empty-catalog" }, { status: 409 });
 
+    const acquisitionState = body.originType === "publicacao"
+      ? await getPublicationAcquisitionState(database, authentication.user.uid, body.originId)
+      : await getCatalogAcquisitionState(database, authentication.user.uid, body.originId, publicationIds);
+    if (acquisitionState === "purchased"
+      || (body.tipo === "aluguel" && (acquisitionState === "rented" || acquisitionState === "subscribed"))
+      || (body.tipo === "assinatura" && acquisitionState === "subscribed"))
+      return Response.json({ error: "already-acquired", state: acquisitionState }, { status: 409 });
+
     const title = String(item.titulo ?? "Conteúdo").trim() || "Conteúdo";
     const description = String(item.descricao ?? "").trim();
+    const returnPath = body.originType === "publicacao"
+      ? `/exibicao?publicationId=${encodeURIComponent(body.originId)}`
+      : `/catalogo/${encodeURIComponent(body.originId)}`;
     const transactionId = randomUUID();
     const transactionRef = database.collection("transacao").doc(transactionId);
     let stage = "product";
@@ -99,8 +114,8 @@ export async function POST(request: Request) {
       const checkout = await createAbacateCheckout({
         productId,
         externalId: transactionId,
-        returnUrl: `${appUrl}/painel_controle?pagamento=pendente`,
-        completionUrl: `${appUrl}/painel_controle?pagamento=confirmacao`,
+        returnUrl: `${appUrl}${returnPath}${returnPath.includes("?") ? "&" : "?"}pagamento=pendente`,
+        completionUrl: `${appUrl}${returnPath}${returnPath.includes("?") ? "&" : "?"}pagamento=confirmacao`,
         metadata: {
           transactionId,
           buyerId: authentication.user.uid,

@@ -233,6 +233,15 @@ textarea:focus-visible {
   width: 100%;
 }
 
+.catalog-acquisition-options .acquisition-actions {
+  width: 100%;
+}
+
+.catalog-acquisition-options .acquisition-actions .acquisition-price {
+  flex: 1;
+  width: auto;
+}
+
 .acquisition-option {
   align-items: flex-end;
   display: flex;
@@ -255,6 +264,33 @@ textarea:focus-visible {
   font-size: 15px;
   min-width: 115px;
   padding: 3px 8px;
+}
+
+.acquisition-actions {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.acquisition-download {
+  background: var(--panel-muted);
+  border: 1px solid rgb(248 227 196 / 28%);
+  color: var(--cream);
+  cursor: pointer;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 3px 8px;
+}
+
+.acquisition-download:hover {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: var(--navy);
+}
+
+.acquisition-download:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 .acquisition-price:hover {

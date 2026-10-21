@@ -11,6 +11,7 @@ import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 import Reviews from "../components/Reviews";
 import VideoPlayer from "../components/VideoPlayer";
+import { useAcquisitionState } from "../hooks/useAcquisitionState";
 import { useAuth } from "../providers";
 import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 
@@ -20,6 +21,7 @@ type PublicationView = {
   miniatura: string;
   criador: string;
   arquivo: string;
+  tamanho: number;
   tipo: string;
   url: string;
   channelName: string;
@@ -46,7 +48,6 @@ function timestampToMillis(value: unknown) {
   if (value instanceof Date) return value.getTime();
   return typeof value === "number" ? value : 0;
 }
-
 function formatDuration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
   const totalSeconds = Math.floor(seconds);
@@ -79,6 +80,7 @@ function toAcquisitionOptions(items: { tipo?: string; preco?: number; duracao?: 
   });
 }
 
+//componente para exibir a publicação, incluindo visualização, informações do criador, opções de aquisição e recomendações
 function Viewer({ publication }: { publication: PublicationView }) {
   const mimeType = getMimeType(publication.arquivo, publication.tipo);
   if (!publication.url)
@@ -95,13 +97,73 @@ function Viewer({ publication }: { publication: PublicationView }) {
 
 export default function PublicationDetail({ publicationId }: { publicationId: string }) {
   const { user } = useAuth();
+  const { acquisitionState, isAcquisitionLoading } = useAcquisitionState("publicacao", publicationId);
   const [publication, setPublication] = useState<PublicationView | null>(null);
   const [message, setMessage] = useState("Carregando publicação...");
   const [thumbnailOrientation, setThumbnailOrientation] = useState<{ src: string; isPortrait: boolean } | null>(null);
   const [creatorPublications, setCreatorPublications] = useState<RelatedPublication[]>([]);
   const [recommendations, setRecommendations] = useState<RelatedPublication[]>([]);
   const [relatedMessage, setRelatedMessage] = useState("Carregando publicações...");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState("");
 
+  //função para baixar a publicação, verificando se o usuário tem acesso e se o download já não está em andamento
+  async function downloadPublication() {
+    if (!publication?.arquivo || acquisitionState !== "purchased" || isDownloading) return;
+    if (!user) {
+      setDownloadMessage("Entre na sua conta para baixar esta publicação.");
+      return;
+    }
+    setIsDownloading(true);
+    setDownloadMessage("Conectando ao armazenamento...");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 120_000);
+    try {
+      const params = new URLSearchParams({
+        originType: "publicacao",
+        originId: publicationId,
+        publicationId,
+      });
+      const response = await fetch(`/api/payments/download?${params}`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(result?.error ?? `download-http-${response.status}`);
+      }
+      setDownloadMessage("Baixando publicação...");
+      const blob = await response.blob();
+      if (blob.size === 0) throw new Error("storage-empty-file");
+      const extension = publication.arquivo.split(".").pop()?.toLowerCase() || "bin";
+      const filename = `${publication.titulo.replace(/[\\/:*?"<>|]/g, "-")}.${extension}`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloadMessage("Download iniciado.");
+    } catch (error) {
+      console.error("Publication download failed", error);
+      setDownloadMessage(error instanceof DOMException && error.name === "AbortError"
+        ? "O download excedeu 2 minutos e foi interrompido. Verifique sua conexão e tente novamente."
+        : error instanceof Error && error.message === "purchase-required"
+          ? "Não foi possível confirmar a compra deste arquivo. Recarregue a página e tente novamente."
+          : error instanceof Error && error.message === "file-not-found"
+            ? "O arquivo não está mais disponível no armazenamento."
+          : "Não foi possível baixar a publicação. Verifique sua conexão e o acesso ao arquivo.");
+    } finally {
+      window.clearTimeout(timeout);
+      setIsDownloading(false);
+    }
+  }
+
+  //carrega os dados da publicação, do criador e das recomendações, atualizando o estado do componente
   useEffect(() => {
     let isCurrent = true;
 
@@ -130,6 +192,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
             miniatura: String(data.miniatura ?? ""),
             criador: creatorId,
             arquivo: archivePath,
+            tamanho: Number(data.tamanho ?? 0),
             tipo: String(data.tipo ?? "livro"),
             url,
             channelName: String(profile?.nome ?? "Criador"),
@@ -245,7 +308,12 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
                 originType="publicacao"
                 originId={publicationId}
                 ownerId={publication.criador}
+                acquisitionState={acquisitionState}
+                isAcquisitionLoading={isAcquisitionLoading}
+                onDownload={() => void downloadPublication()}
+                isDownloading={isDownloading}
               /></div>}
+              {downloadMessage && <p className="mb-3 text-xs text-red" role="alert">{downloadMessage}</p>}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" className="bg-panel-muted px-5 py-2 text-xl text-white hover:bg-gold hover:text-navy">Seguir</button>

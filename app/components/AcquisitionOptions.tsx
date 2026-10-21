@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../providers";
 
 type AcquisitionOption = {
-  label: string;
+  label: string;// "Aluguel" | "Compra" | "Assinatura" | "Gratuito"
   price: string;
-  tipo?: string;
+  tipo?: string;// aluguel | compra | assinatura | gratuito
 };
+
+type AcquisitionState = "purchased" | "rented" | "subscribed" | null;
 
 type AcquisitionOptionsProps = {
   options: AcquisitionOption[];
@@ -17,6 +19,10 @@ type AcquisitionOptionsProps = {
   originType?: "publicacao" | "catalogo";
   originId?: string;
   ownerId?: string;
+  acquisitionState?: AcquisitionState;
+  isAcquisitionLoading?: boolean;
+  onDownload?: () => void;
+  isDownloading?: boolean;
 };
 
 export default function AcquisitionOptions({
@@ -26,12 +32,17 @@ export default function AcquisitionOptions({
   originType,
   originId,
   ownerId,
+  acquisitionState = null,
+  isAcquisitionLoading = false,
+  onDownload,
+  isDownloading = false,
 }: AcquisitionOptionsProps) {
   const { user } = useAuth();
   const router = useRouter();
   const [loadingType, setLoadingType] = useState("");
   const [message, setMessage] = useState("");
 
+  //inicia o processo de aquisição do conteúdo, redirecionando para a página de checkout
   async function acquire(type: string) {
     if (!originType || !originId || !["aluguel", "compra", "assinatura"].includes(type) || loadingType)
       return;
@@ -57,6 +68,10 @@ export default function AcquisitionOptions({
       });
       const result = await response.json().catch(() => null) as { checkoutUrl?: string; error?: string } | null;
       if (!response.ok || !result?.checkoutUrl) {
+        if (result?.error === "already-acquired") {
+          setMessage("Este conteúdo já foi adquirido ou está ativo na sua conta. Atualize a página para ver o estado atual.");
+          return;
+        }
         if (result?.error === "firebase-admin-configuration")
           throw new Error("O Firebase Admin ainda não está configurado no servidor.");
         if (result?.error === "monetization-unavailable")
@@ -82,22 +97,61 @@ export default function AcquisitionOptions({
   return (
     <div>
       <div className={`acquisition-options acquisition-options-${direction} ${compact ? "acquisition-options-compact" : ""}`}>
-      {options.map(({ label, price, tipo }) => (
-        <div className="acquisition-option" key={`${label}-${price}`}>
-          <span className="acquisition-label">{label}</span>
-          {tipo && tipo !== "gratuito" && originType && originId
-            ? <button
-              type="button"
-              className="acquisition-price disabled:cursor-wait disabled:opacity-60"
-              aria-label={`${label}: ${price}`}
-              disabled={Boolean(loadingType) || ownerId === user?.uid}
-              onClick={() => void acquire(tipo)}
-            >
-              {loadingType === tipo ? "Aguarde..." : price}
-            </button>
-            : <span className="acquisition-price inline-block text-center" aria-label={`${label}: ${price}`}>{price}</span>}
-        </div>
-      ))}
+        {options.map(({ label, price, tipo }) => {
+          const isPurchase = tipo === "compra";
+          const isRental = tipo === "aluguel";
+          const isSubscription = tipo === "assinatura";
+          const disabledByState = acquisitionState === "purchased"
+            || (acquisitionState === "rented" && isRental)
+            || (acquisitionState === "subscribed" && (isRental || isSubscription));
+          const displayedLabel = acquisitionState === "purchased" && isPurchase
+            ? "Comprado"
+            : acquisitionState === "purchased"
+              ? "Indisponível"
+            : acquisitionState === "rented" && isRental
+              ? "Alugado"
+              : acquisitionState === "subscribed" && isSubscription
+                ? "Assinado"
+                : acquisitionState === "subscribed" && isRental
+                  ? "Indisponível"
+                : label;
+          
+          const canDownload = acquisitionState === "purchased" && isPurchase && onDownload;//se o conteúdo foi comprado o botão de download fica disponível
+          //se o conteúdo foi alugado ou assinado, o botão de download não fica disponível, pois o acesso é temporário e depende da concessão de acesso ativa
+          return <div className="acquisition-option" key={`${label}-${price}`}>
+            <span className="acquisition-label">{displayedLabel}</span>
+            {tipo && tipo !== "gratuito" && originType && originId
+              ? <div className="acquisition-actions">
+                <button
+                  type="button"
+                  className="acquisition-price"
+                  aria-label={`${displayedLabel}: ${price}`}
+                  disabled={Boolean(loadingType) || isAcquisitionLoading || ownerId === user?.uid || disabledByState}
+                  onClick={() => void acquire(tipo)}
+                >
+                  {loadingType === tipo ? "Aguarde..." : price}
+                </button>
+                {canDownload && <button
+                  type="button"
+                  className="acquisition-download"
+                  disabled={isDownloading || isAcquisitionLoading}
+                  onClick={onDownload}
+                >
+                  {isDownloading ? "Preparando..." : "Baixar"}
+                </button>}
+              </div>
+              : <span className="acquisition-price inline-block text-center" aria-label={`${displayedLabel}: ${price}`}>{price}</span>}
+          </div>;
+        })}
+        {acquisitionState === "purchased" && onDownload && !options.some((option) => option.tipo === "compra")
+          && <button
+            type="button"
+            className="acquisition-download"
+            disabled={isDownloading || isAcquisitionLoading}
+            onClick={onDownload}
+          >
+            {isDownloading ? "Preparando..." : "Baixar"}
+          </button>}
       </div>
       {message && <p className="mt-2 text-xs text-red" role="alert">{message}</p>}
     </div>
