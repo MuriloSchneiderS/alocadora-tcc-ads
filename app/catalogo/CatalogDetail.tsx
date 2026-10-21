@@ -1,7 +1,7 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { getBytes, ref } from "firebase/storage";
+import { getDownloadURL, ref } from "firebase/storage";
 import { zipSync } from "fflate";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -127,23 +127,48 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
     if (!window.confirm(`O download de "${loaded.catalog.titulo}" inclui ${items.length} arquivos, com tamanho total de ${formatFileSize(totalSize)} antes da compactação. Deseja continuar?`)) return;
 
     setIsDownloading(true);
-    setDownloadMessage("");
+    setDownloadMessage(`Baixando arquivo 1 de ${items.length}...`);
     try {
-      const entries = await Promise.all(items.map(async (publication) => {
-        const bytes = await getBytes(ref(storage, publication.arquivo));
+      const entries: Record<string, Uint8Array> = {};
+      for (const [index, publication] of items.entries()) {
+        setDownloadMessage(`Baixando arquivo ${index + 1} de ${items.length}: ${publication.titulo}`);
+        const fileRef = ref(storage, publication.arquivo);
+        const downloadUrl = await getDownloadURL(fileRef);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 120_000);
+        let bytes: ArrayBuffer;
+        try {
+          const response = await fetch(downloadUrl, { signal: controller.signal, cache: "no-store" });
+          if (!response.ok) throw new Error(`storage-http-${response.status}`);
+          bytes = await response.arrayBuffer();
+        } finally {
+          window.clearTimeout(timeout);
+        }
+        if (bytes.byteLength === 0) throw new Error(`storage-empty-file-${publication.id}`);
         const extension = publication.arquivo.split(".").pop()?.toLowerCase() || "bin";
         const filename = `${catalogName}/${safeFileName(publication.titulo)}-${publication.id.slice(0, 8)}.${extension}`;
-        return [filename, new Uint8Array(bytes)] as const;
-      }));
-      const archive = zipSync(Object.fromEntries(entries), { level: 6 });
+        entries[filename] = new Uint8Array(bytes);
+      }
+      setDownloadMessage("Compactando arquivos...");
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const archive = zipSync(entries, { level: 0 });
       const url = URL.createObjectURL(new Blob([new Uint8Array(archive).buffer], { type: "application/zip" }));
       const link = document.createElement("a");
       link.href = url;
       link.download = `${catalogName}.zip`;
+      link.style.display = "none";
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      setDownloadMessage("Não foi possível baixar todos os arquivos. Verifique sua conexão e o acesso ao catálogo e tente novamente.");
+      setDownloadMessage("Download do catálogo iniciado.");
+    } catch (error) {
+      console.error("Catalog download failed", error);
+      setDownloadMessage(error instanceof DOMException && error.name === "AbortError"
+        ? "O download de um arquivo excedeu 2 minutos e foi interrompido. Verifique sua conexão e tente novamente."
+        : error instanceof Error && error.message.startsWith("storage-http-")
+          ? `O armazenamento recusou um arquivo (${error.message.replace("storage-http-", "HTTP ")}). Confira o acesso ao catálogo.`
+          : "Não foi possível baixar todos os arquivos. Verifique sua conexão e o acesso ao catálogo e tente novamente.");
     } finally {
       setIsDownloading(false);
     }

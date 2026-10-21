@@ -1,7 +1,7 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, Timestamp } from "firebase/firestore";
-import { getBytes, getDownloadURL, ref } from "firebase/storage";
+import { getDownloadURL, ref } from "firebase/storage";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { db, storage } from "../../lib/firebase";
@@ -111,20 +111,39 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
   async function downloadPublication() {
     if (!publication?.arquivo || acquisitionState !== "purchased" || isDownloading) return;
     setIsDownloading(true);
-    setDownloadMessage("");
+    setDownloadMessage("Conectando ao armazenamento...");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 120_000);
     try {
-      const bytes = await getBytes(ref(storage, publication.arquivo));
+      const downloadUrl = publication.url || await getDownloadURL(ref(storage, publication.arquivo));
+      setDownloadMessage("Baixando publicação...");
+      const response = await fetch(downloadUrl, { signal: controller.signal, cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`storage-http-${response.status}`);
+      }
+      const blob = await response.blob();
+      if (blob.size === 0) throw new Error("storage-empty-file");
       const extension = publication.arquivo.split(".").pop()?.toLowerCase() || "bin";
       const filename = `${publication.titulo.replace(/[\\/:*?"<>|]/g, "-")}.${extension}`;
-      const url = URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer], { type: "application/octet-stream" }));
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      setDownloadMessage("Não foi possível baixar a publicação. Verifique sua conexão e tente novamente.");
+      setDownloadMessage("Download iniciado.");
+    } catch (error) {
+      console.error("Publication download failed", error);
+      setDownloadMessage(error instanceof DOMException && error.name === "AbortError"
+        ? "O download excedeu 2 minutos e foi interrompido. Verifique sua conexão e tente novamente."
+        : error instanceof Error && error.message.startsWith("storage-http-")
+          ? `O armazenamento recusou o download (${error.message.replace("storage-http-", "HTTP ")}). Confira o acesso ao arquivo.`
+          : "Não foi possível baixar a publicação. Verifique sua conexão e o acesso ao arquivo.");
     } finally {
+      window.clearTimeout(timeout);
       setIsDownloading(false);
     }
   }
