@@ -110,17 +110,30 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
   //função para baixar a publicação, verificando se o usuário tem acesso e se o download já não está em andamento
   async function downloadPublication() {
     if (!publication?.arquivo || acquisitionState !== "purchased" || isDownloading) return;
+    if (!user) {
+      setDownloadMessage("Entre na sua conta para baixar esta publicação.");
+      return;
+    }
     setIsDownloading(true);
     setDownloadMessage("Conectando ao armazenamento...");
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 120_000);
     try {
-      const downloadUrl = publication.url || await getDownloadURL(ref(storage, publication.arquivo));
-      setDownloadMessage("Baixando publicação...");
-      const response = await fetch(downloadUrl, { signal: controller.signal, cache: "no-store" });
+      const params = new URLSearchParams({
+        originType: "publicacao",
+        originId: publicationId,
+        publicationId,
+      });
+      const response = await fetch(`/api/payments/download?${params}`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        signal: controller.signal,
+        cache: "no-store",
+      });
       if (!response.ok) {
-        throw new Error(`storage-http-${response.status}`);
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(result?.error ?? `download-http-${response.status}`);
       }
+      setDownloadMessage("Baixando publicação...");
       const blob = await response.blob();
       if (blob.size === 0) throw new Error("storage-empty-file");
       const extension = publication.arquivo.split(".").pop()?.toLowerCase() || "bin";
@@ -139,8 +152,10 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
       console.error("Publication download failed", error);
       setDownloadMessage(error instanceof DOMException && error.name === "AbortError"
         ? "O download excedeu 2 minutos e foi interrompido. Verifique sua conexão e tente novamente."
-        : error instanceof Error && error.message.startsWith("storage-http-")
-          ? `O armazenamento recusou o download (${error.message.replace("storage-http-", "HTTP ")}). Confira o acesso ao arquivo.`
+        : error instanceof Error && error.message === "purchase-required"
+          ? "Não foi possível confirmar a compra deste arquivo. Recarregue a página e tente novamente."
+          : error instanceof Error && error.message === "file-not-found"
+            ? "O arquivo não está mais disponível no armazenamento."
           : "Não foi possível baixar a publicação. Verifique sua conexão e o acesso ao arquivo.");
     } finally {
       window.clearTimeout(timeout);

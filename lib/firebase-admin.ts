@@ -2,6 +2,7 @@ import "server-only";
 
 import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 export function getAdminFirestore(expectedProjectId?: string) {
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -27,4 +28,12 @@ export function getAdminFirestore(expectedProjectId?: string) {
   }
 
   return getFirestore();
+}
+
+export function getAdminStorageBucket(expectedProjectId?: string) {
+  getAdminFirestore(expectedProjectId);
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName)
+    throw new Error("firebase-admin-storage-bucket-missing");
+  return getStorage().bucket(bucketName);
 }

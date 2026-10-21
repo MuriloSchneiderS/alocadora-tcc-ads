@@ -1,12 +1,11 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { getDownloadURL, ref } from "firebase/storage";
 import { zipSync } from "fflate";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { db, storage } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
 import Header from "../components/Header";
 import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
@@ -121,6 +120,10 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
 
   async function downloadCatalog() {
     if (!loaded?.catalog || acquisitionState !== "purchased" || isDownloading) return;
+    if (!user) {
+      setDownloadMessage("Entre na sua conta para baixar este catálogo.");
+      return;
+    }
     const totalSize = items.reduce((total, publication) => total + publication.tamanho, 0);
     const catalogName = safeFileName(loaded.catalog.titulo);
     //confirma com o usuário se ele deseja continuar com o download, informando a quantidade de arquivos e o tamanho total antes da compactação
@@ -130,16 +133,27 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
     setDownloadMessage(`Baixando arquivo 1 de ${items.length}...`);
     try {
       const entries: Record<string, Uint8Array> = {};
+      const token = await user.getIdToken();
       for (const [index, publication] of items.entries()) {
         setDownloadMessage(`Baixando arquivo ${index + 1} de ${items.length}: ${publication.titulo}`);
-        const fileRef = ref(storage, publication.arquivo);
-        const downloadUrl = await getDownloadURL(fileRef);
+        const params = new URLSearchParams({
+          originType: "catalogo",
+          originId: catalogId,
+          publicationId: publication.id,
+        });
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 120_000);
         let bytes: ArrayBuffer;
         try {
-          const response = await fetch(downloadUrl, { signal: controller.signal, cache: "no-store" });
-          if (!response.ok) throw new Error(`storage-http-${response.status}`);
+          const response = await fetch(`/api/payments/download?${params}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          if (!response.ok) {
+            const result = await response.json().catch(() => null) as { error?: string } | null;
+            throw new Error(result?.error ?? `download-http-${response.status}`);
+          }
           bytes = await response.arrayBuffer();
         } finally {
           window.clearTimeout(timeout);
@@ -166,8 +180,10 @@ export default function CatalogDetail({ catalogId }: { catalogId: string }) {
       console.error("Catalog download failed", error);
       setDownloadMessage(error instanceof DOMException && error.name === "AbortError"
         ? "O download de um arquivo excedeu 2 minutos e foi interrompido. Verifique sua conexão e tente novamente."
-        : error instanceof Error && error.message.startsWith("storage-http-")
-          ? `O armazenamento recusou um arquivo (${error.message.replace("storage-http-", "HTTP ")}). Confira o acesso ao catálogo.`
+        : error instanceof Error && error.message === "purchase-required"
+          ? "Uma publicação não está coberta pela compra deste catálogo. Atualize o catálogo e tente novamente."
+          : error instanceof Error && error.message === "file-not-found"
+            ? "Uma publicação não está mais disponível no armazenamento."
           : "Não foi possível baixar todos os arquivos. Verifique sua conexão e o acesso ao catálogo e tente novamente.");
     } finally {
       setIsDownloading(false);
