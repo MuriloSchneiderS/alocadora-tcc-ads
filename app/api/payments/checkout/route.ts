@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
-import { createAbacateCheckout, AbacatePayError } from "@/lib/abacate-pay";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { createAbacateCheckout, createAbacateCustomer, AbacatePayError } from "@/lib/abacate-pay";
+import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
 import { ensureAbacateProduct } from "@/lib/payment-products";
 import { getCatalogAcquisitionState, getPublicationAcquisitionState } from "@/lib/payment-access";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
@@ -33,6 +34,41 @@ function isHttpsUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+async function ensureAbacateCustomer(
+  database: FirebaseFirestore.Firestore,
+  user: { uid: string; email: string | null; displayName: string | null },
+) {
+  if (!user.email)
+    throw new Error("payment-customer-email-missing");
+
+  const customerRef = database.collection("abacatepay_cliente").doc(user.uid);
+  const existingCustomer = await customerRef.get();
+  const existingCustomerId = existingCustomer.get("customer_id");
+  if (typeof existingCustomerId === "string" && existingCustomerId)
+    return existingCustomerId;
+
+  const profileSnapshot = await database.collection("usuario").doc(user.uid).get();
+  const profileName = profileSnapshot.get("nome");
+  const name = typeof profileName === "string" && profileName.trim()
+    ? profileName.trim()
+    : user.displayName?.trim() || user.email.split("@")[0];
+  const customer = await createAbacateCustomer({
+    email: user.email,
+    name,
+    metadata: { firebaseUid: user.uid },
+  });
+  if (!customer.id)
+    throw new Error("payment-customer-provisioning");
+
+  await customerRef.set({
+    customer_id: customer.id,
+    email: user.email,
+    nome: name,
+    atualizado_em: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return customer.id;
 }
 
 export async function POST(request: Request) {
@@ -102,6 +138,18 @@ export async function POST(request: Request) {
     let stage = "product";
 
     try {
+      stage = "customer";
+      const creator = await getAdminAuth().getUser(item.criador);
+      const [buyerCustomerId, creatorCustomerId] = await Promise.all([
+        ensureAbacateCustomer(database, authentication.user),
+        ensureAbacateCustomer(database, {
+          uid: creator.uid,
+          email: creator.email ?? null,
+          displayName: creator.displayName ?? null,
+        }),
+      ]);
+
+      stage = "product";
       const productId = await ensureAbacateProduct(database, {
         originType: body.originType,
         originId: body.originId,
@@ -113,6 +161,7 @@ export async function POST(request: Request) {
       stage = "checkout";
       const checkout = await createAbacateCheckout({
         productId,
+        customerId: buyerCustomerId,
         externalId: transactionId,
         returnUrl: `${appUrl}${returnPath}${returnPath.includes("?") ? "&" : "?"}pagamento=pendente`,
         completionUrl: `${appUrl}${returnPath}${returnPath.includes("?") ? "&" : "?"}pagamento=confirmacao`,
@@ -131,6 +180,8 @@ export async function POST(request: Request) {
       await transactionRef.create({
         comprador: authentication.user.uid,
         vendedor: item.criador,
+        cliente_comprador_id: buyerCustomerId,
+        cliente_vendedor_id: creatorCustomerId,
         origem_tipo: body.originType,
         origem_id: body.originId,
         publicacoes: publicationIds,
@@ -154,7 +205,11 @@ export async function POST(request: Request) {
         error: error instanceof Error ? error.message : "unknown",
       });
       return Response.json({
-        error: error instanceof Error && error.message === "payment-product-provisioning"
+        error: error instanceof Error && error.message === "payment-customer-email-missing"
+          ? "payment-customer-email-missing"
+          : error instanceof Error && error.message === "payment-customer-provisioning"
+            ? "payment-customer-provisioning"
+            : error instanceof Error && error.message === "payment-product-provisioning"
           ? "payment-product-provisioning"
           : error instanceof Error && error.message === "abacatepay-api-key-missing"
             ? "abacatepay-configuration"

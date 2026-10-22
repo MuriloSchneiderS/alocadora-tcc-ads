@@ -12,6 +12,10 @@ export type AbacateProduct = {
   id: string;
 };
 
+export type AbacateCustomer = {
+  id: string;
+};
+
 export type AbacateCheckout = {
   id: string;
   url: string;
@@ -77,8 +81,17 @@ export function createAbacateProduct(input: {
   });
 }
 
+export function createAbacateCustomer(input: {
+  email: string;
+  name: string;
+  metadata?: Record<string, string>;
+}) {
+  return requestAbacatePay<AbacateCustomer>("/customers/create", input);
+}
+
 export function createAbacateCheckout(input: {
   productId: string;
+  customerId: string;
   externalId: string;
   returnUrl: string;
   completionUrl: string;
@@ -89,6 +102,7 @@ export function createAbacateCheckout(input: {
     input.subscription ? "/subscriptions/create" : "/checkouts/create",
     {
       items: [{ id: input.productId, quantity: 1 }],
+      customerId: input.customerId,
       externalId: input.externalId,
       returnUrl: input.returnUrl,
       completionUrl: input.completionUrl,
