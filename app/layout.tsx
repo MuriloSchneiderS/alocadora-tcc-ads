@@ -7,6 +7,9 @@ import "video.js/dist/video-js.css";
 export const metadata: Metadata = {
   title: "Alocadora",
   description: "Plataforma para publicação, aluguel e compra de mídias digitais.",
+  other: {
+    "google-adsense-account": "ca-pub-9486375314273706",
+  },
 };
 
 export default function RootLayout({
@@ -23,7 +26,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-slate-950 text-slate-50">
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9486375314273706"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
           crossOrigin="anonymous"
         />
         <AuthProvider>{children}</AuthProvider>
