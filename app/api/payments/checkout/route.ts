@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
 import { createAbacateCheckout, createAbacateCustomer, AbacatePayError } from "@/lib/abacate-pay";
-import { getAdminAuth, getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin-auth";
 import { ensureAbacateProduct } from "@/lib/payment-products";
 import { getCatalogAcquisitionState, getPublicationAcquisitionState } from "@/lib/payment-access";
 import { FieldValue } from "firebase-admin/firestore";
