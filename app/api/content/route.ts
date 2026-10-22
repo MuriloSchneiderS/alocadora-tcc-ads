@@ -1,4 +1,5 @@
 import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
+import { getAdminFirestore } from "@/lib/firebase-admin";
 
 const publicationTypes = new Set(["imagem", "video", "audio", "livro"]);
 const monetizationTypes = new Set(["gratuito", "aluguel", "compra"]);
@@ -144,6 +145,15 @@ export async function POST(request: Request) {
   const body: unknown = await request.json().catch(() => null);
   if (!isValidContentRequest(body, user.uid))
     return Response.json({ error: "invalid-content" }, { status: 400 });
+  //coleção dados_recebimento é separada do usuário por segurança, ja que usuário é um documento público.
+  try {
+    const recipient = await getAdminFirestore(user.projectId).collection("dados_recebimento").doc(user.uid).get();
+    if (recipient.data()?.pronto !== true)
+      return Response.json({ error: "payout-profile-required" }, { status: 409 });
+  } catch (error) {
+    console.error("Publication payout profile check failed", error);
+    return Response.json({ error: "payout-profile-unavailable" }, { status: 503 });
+  }
 
   const { publicationId } = body;
   const publicationName = `projects/${user.projectId}/databases/(default)/documents/publicacao/${publicationId}`;

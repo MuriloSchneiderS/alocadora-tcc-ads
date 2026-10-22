@@ -15,6 +15,12 @@ import { useAcquisitionState } from "../hooks/useAcquisitionState";
 import { useAuth } from "../providers";
 import { DEFAULT_CHANNEL_TITLE, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 
+declare global {//declaração global para permitir o uso de anúncios AdSense
+  interface Window {
+    adsbygoogle?: Record<string, unknown>[];
+  }
+}
+
 type PublicationView = {
   titulo: string;
   descricao: string;
@@ -95,8 +101,37 @@ function Viewer({ publication }: { publication: PublicationView }) {
   return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center"><p>Este formato não possui visualização direta no navegador.</p><a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a></div>;
 }
 
+function PublicationAd() {//componente para exibir anúncios AdSense antes do visualizador de publicações gratuitas
+  const slot = process.env.NEXT_PUBLIC_ADSENSE_PUBLICATION_SLOT;
+
+  useEffect(() => {
+    if (!slot) return;
+    try {
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (error) {
+      console.error("AdSense publication ad failed to load", error);
+    }
+  }, [slot]);
+
+  if (!slot) return null;
+
+  return (
+    <div className="shrink-0 bg-black px-3 py-2 text-center">
+      <span className="mb-1 block text-[10px] uppercase text-cream/50">Anúncio</span>
+      <ins
+        className="adsbygoogle block min-h-[90px] w-full"
+        style={{ display: "block" }}
+        data-ad-client="ca-pub-9486375314273706"
+        data-ad-slot={slot}
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+    </div>
+  );
+}
+
 export default function PublicationDetail({ publicationId }: { publicationId: string }) {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const { acquisitionState, isAcquisitionLoading } = useAcquisitionState("publicacao", publicationId);
   const [publication, setPublication] = useState<PublicationView | null>(null);
   const [message, setMessage] = useState("Carregando publicação...");
@@ -266,6 +301,15 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
       && thumbnailOrientation?.src === publication.miniatura
       && thumbnailOrientation.isPortrait,
   );
+  //exibe anúncio AdSense antes do visualizador de publicações gratuitas, 
+  //se o slot estiver configurado e a publicação for gratuita e o usuário não estiver logado ou não tiver adquirido a publicação
+  const shouldShowAdvertisement = Boolean(
+    publication?.url
+      && publication.monetizacoes.some((option) => option.tipo === "gratuito")
+      && !isAuthLoading
+      && !isAcquisitionLoading
+      && !acquisitionState,
+  );
   const relatedCards = (items: RelatedPublication[]) => items.map((item) => <MediaCard
     key={item.id}
     title={item.titulo}
@@ -282,7 +326,10 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {!publication && <p className="py-12 text-center text-sm text-cream/70" role="status">{message}</p>}
         {publication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div className="aspect-video overflow-hidden bg-black lg:min-h-[60vh] lg:aspect-auto"><Viewer publication={publication} /></div>
+          <div className="flex flex-col overflow-hidden bg-black">
+            {shouldShowAdvertisement && <PublicationAd />}
+            <div className="aspect-video w-full lg:min-h-[60vh] lg:aspect-auto"><Viewer publication={publication} /></div>
+          </div>
           <aside className="flex flex-col bg-panel p-3">
             <div className={thumbnailIsPortrait && publication.miniatura ? "flex items-start gap-3" : ""}>
               {publication.miniatura && <img

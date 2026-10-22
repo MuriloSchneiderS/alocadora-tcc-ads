@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import Header from "../components/Header";
 import PaymentDashboard from "../components/PaymentDashboard";
+import RecipientSettings from "../components/RecipientSettings";
 import { auth, db, storage } from "../../lib/firebase";
 import { createDefaultUserProfile, DEFAULT_USER_AVATAR } from "../../lib/user-profile";
 import { useAuth } from "../providers";
@@ -171,6 +172,7 @@ export default function PainelControle() {
           </div>
         </div>
       </section>
+      <RecipientSettings />
       <PaymentDashboard />
       <button type="button" onClick={handleSignOut} className="mt-8 border border-red px-5 py-2 text-xs font-bold text-red hover:bg-red hover:text-white">FAZER LOGOFF</button>
     </main>

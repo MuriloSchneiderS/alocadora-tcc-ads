@@ -12,6 +12,8 @@ function isoDate(value: unknown) {
 
 function transactionView(snapshot: FirebaseFirestore.QueryDocumentSnapshot) {
   const data = snapshot.data();
+  const price = Number(data.preco ?? 0);
+  const platformFee = Number(data.taxa_plataforma ?? Math.round(price * 0.1));//split 90/10, taxa da plataforma de 10%
   return {
     id: snapshot.id,
     comprador: String(data.comprador ?? ""),
@@ -19,7 +21,9 @@ function transactionView(snapshot: FirebaseFirestore.QueryDocumentSnapshot) {
     origem_tipo: String(data.origem_tipo ?? ""),
     origem_id: String(data.origem_id ?? ""),
     tipo: String(data.tipo ?? ""),
-    preco: Number(data.preco ?? 0),
+    preco: price,
+    taxa_plataforma: platformFee,
+    valor_criador: Number(data.valor_criador ?? price - platformFee),
     status: String(data.status ?? "pendente"),
     comprado_em: isoDate(data.comprado_em),
     expira_em: isoDate(data.expira_em),

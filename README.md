@@ -73,8 +73,17 @@ ____- publicacoes (ids cobertos pela aquisição)<br />
 ____- tipo (aluguel, compra ou assinatura)<br />
 ____- preco (centavos), moeda (BRL), status<br />
 ____- checkout_id (ID retornado pela Abacate Pay)<br />
+____- taxa_plataforma (10% do valor, em centavos, calculada pelo backend)<br />
+____- valor_criador (90% do valor, em centavos, calculado pelo backend)<br />
 ____- comprado_em <br />
 ____- expira_em (quando aplicável)<br />
+dados_recebimento/{usuarioId} (dados privados de PIX e conta bancária, somente servidor)<br />
+____- titular, cpf, banco, agencia, conta e tipo_conta<br />
+____- pix_tipo e pix_chave<br />
+____- pronto e atualizado_em<br />
+saque/{saqueId} (histórico e comprovantes de saques simulados, somente servidor)<br />
+____- vendedor, valor (centavos), moeda, status, email e criado_em<br />
+____- destinatario (cópia dos dados informados no momento do saque)<br />
 assinatura/{subscriptionId} (metadados internos, somente API autenticada)<br />
 ____- usuario<br />
 ____- vendedor <br />
@@ -109,19 +118,31 @@ O backend HTTP usa Route Handlers do App Router em 'app/api':<br />
 
 Firebase Admin: as variáveis 'NEXT_PUBLIC_FIREBASE_*' do '.env' configuram o SDK web e não concedem privilégios administrativos. Login e publicação padrão usam o ID token do usuário e as regras do Firestore. Firebase Admin opera somente no servidor para que checkout e webhooks gravem concessões e transações confiáveis; por isso, ela exige também uma credencial de conta de serviço, guardada em variáveis secretas locais/Vercel.<br />
 
-APIs protegidas usam 'authenticateFirebaseRequest', derivam o proprietário de 'user.uid' e não aceitam UID enviado no corpo como prova de identidade. As regras negam escrita do cliente em concessões, transações, assinaturas, cache de produtos e eventos de webhook.<br />
+APIs protegidas usam 'authenticateFirebaseRequest', derivam o proprietário de 'user.uid' e não aceitam UID enviado no corpo como prova de identidade. As regras negam escrita do cliente em concessões, transações, assinaturas, cache de produtos e eventos de webhook. Dados de recebimento e saques também ficam inacessíveis diretamente pelo cliente; somente rotas autenticadas com Firebase Admin podem consultá-los ou gravá-los.<br />
 
 - 'POST /api/payments/checkout' verifica a monetização e seu preço no Firestore, cria/reusa produto no gateway e retorna uma URL de Checkout.<br />
 - 'POST /api/webhooks/abacatepay' valida o segredo compartilhado e a assinatura HMAC v2 antes de registrar pagamento e liberar acesso.<br />
+- 'GET/PUT /api/payments/recipient' consulta e salva os dados privados de recebimento do usuário autenticado.<br />
+- 'GET/POST /api/payments/withdrawals' calcula o saldo disponível e registra um saque simulado com comprovante no painel.<br />
 - 'GET /api/payments/dashboard' devolve dados do próprio usuário; 'POST /api/payments/subscriptions/cancel' interrompe a recorrência sem antecipar o fim do acesso já pago.<br />
 
 ### Pagamentos
 
 O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate Pay. Compras e aluguéis avulsos usam PIX; assinaturas mensais de catálogo usam cartão. O servidor confirma o preço no Firestore e, após receber um webhook válido de pagamento, registra a transação e libera o acesso.<br />
 
-Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações e assinaturas; ao cancelar uma assinatura, o acesso continua até o fim do período pago.<br />
+Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações, assinaturas e saques; ao cancelar uma assinatura, o acesso continua até o fim do período pago.<br />
 
-As gravações de pagamento e permissões usam Firebase Admin somente no servidor; suas credenciais administrativas não são expostas ao navegador. Os pagamentos são recebidos pela plataforma, sem divisão automática de valores entre criadores.<br />
+Para exibir anúncios AdSense antes do visualizador de publicações gratuitas, configure `NEXT_PUBLIC_ADSENSE_PUBLICATION_SLOT` com o ID do bloco de anúncio responsivo criado no AdSense. O anúncio não é renderizado enquanto essa variável não estiver definida. O código do cliente AdSense fica no layout raiz.
+
+#### Recebimento dos criadores e saques de teste
+
+A Abacate Pay usada neste projeto não faz split de marketplace. O pagamento continua sendo recebido pela conta da plataforma; após a confirmação do webhook, o backend registra contabilmente 10% como taxa da plataforma e 90% como parcela do criador, em centavos. Essa divisão inclui compras, aluguéis e cobranças/renovações de assinatura. Não há transferência real nem split enviado ao gateway.<br />
+
+Antes de criar uma nova publicação, o criador precisa informar no painel nome, CPF, banco, agência, conta e chave PIX. O botão **Preencher dados fictícios** facilita testes locais e no sandbox. Esses dados ficam em 'dados_recebimento/{usuarioId}', não no perfil público 'usuario/{usuarioId}', e só são acessados pelas APIs autenticadas com Firebase Admin. Publicações existentes podem continuar sendo editadas.<br />
+
+O saldo disponível soma a parcela de 90% das transações pagas e subtrai saques simulados anteriores. No painel, o criador informa um valor a partir de R$ 1,00; o servidor valida o saldo e registra atomicamente um documento 'saque/{saqueId}' com status 'simulado' e uma cópia do destinatário. O comprovante e o protocolo ficam disponíveis no painel. Nenhum dinheiro é transferido e não há provedor de e-mail configurado, portanto o comprovante não é enviado por e-mail.<br />
+
+As gravações de pagamento, saldo e permissões usam Firebase Admin somente no servidor; suas credenciais administrativas não são expostas ao navegador.<br />
 
 #### Fluxo da aquisição
 
@@ -147,10 +168,11 @@ As gravações de pagamento e permissões usam Firebase Admin somente no servido
     aluguel expira conforme a duração. 
     Assinaturas passam pela confirmação e pelos eventos próprios de assinatura.
 
-    7: O painel de controle do usuário lista compras, vendas, monetizações e assinaturas.
-    O usuário pode cancelar a assinatura, mas o acesso continua até o fim do período já pago.
+    7: O painel de controle lista compras, vendas, monetizações e assinaturas. O criador vê o total bruto, sua parcela de 90% e o saldo disponível; ao cancelar uma assinatura, o acesso continua até o fim do período já pago.
 
-    8: Botões de monetização refletem a aquisição: 
+    8: Para testar um resgate, o criador informa um valor disponível e solicita o saque. O backend reserva o saldo em uma operação atômica e registra um comprovante simulado; não ocorre transferência real nem envio de e-mail.
+
+    9: Botões de monetização refletem a aquisição:
     aluguel ativo impede outro aluguel, assinatura ativa impede assinar ou alugar, 
     e compra ativa mostra “Comprado”, desabilita as modalidades e permite download. 
     Publicações baixam o próprio arquivo; catálogos baixam os arquivos em um ZIP. 

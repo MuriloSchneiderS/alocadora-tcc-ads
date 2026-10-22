@@ -7,7 +7,7 @@ export type AcquisitionState = "purchased" | "rented" | "subscribed" | null;
 
 //hook personalizado para gerenciar o estado de aquisição do usuário para uma publicação ou catálogo específico
 export function useAcquisitionState(originType: "publicacao" | "catalogo", originId: string) {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [state, setState] = useState<AcquisitionState>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -15,6 +15,7 @@ export function useAcquisitionState(originType: "publicacao" | "catalogo", origi
     let isCurrent = true;
 
     async function loadState() {
+      if (isAuthLoading) return;
       if (!user) {
         setState(null);
         setIsLoading(false);
@@ -58,7 +59,7 @@ export function useAcquisitionState(originType: "publicacao" | "catalogo", origi
 
     void loadState();
     return () => { isCurrent = false; };
-  }, [originId, originType, user]);
+  }, [originId, originType, user, isAuthLoading]);
 
   return { acquisitionState: state, isAcquisitionLoading: isLoading };
 }

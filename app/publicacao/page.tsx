@@ -133,6 +133,7 @@ export default function Publicacao() {
   const [publicando, setPublicando] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState(false);
+  const [recipientMissing, setRecipientMissing] = useState(false);
   const [confirmarMiniatura, setConfirmarMiniatura] = useState(false);
   const [progresso, setProgresso] = useState(0);
   const [etapa, setEtapa] = useState("");
@@ -241,6 +242,29 @@ export default function Publicacao() {
       return;
     }
 
+    if (!editing) {
+      try {
+        const response = await fetch("/api/payments/recipient", {
+          headers: { Authorization: `Bearer ${await user!.getIdToken()}` },
+          cache: "no-store",
+        });
+        const result = await response.json().catch(() => null) as { pronto?: boolean } | null;
+        if (!response.ok) throw new Error("Não foi possível verificar os dados para recebimento.");
+        if (!result?.pronto) {
+          setErro(true);
+          setRecipientMissing(true);
+          setMensagem("Cadastre os dados de recebimento no painel de controle antes de criar uma publicação.");
+          return;
+        }
+        setRecipientMissing(false);
+      } catch (error) {
+        setErro(true);
+        setRecipientMissing(false);
+        setMensagem(error instanceof Error ? error.message : "Não foi possível verificar os dados para recebimento.");
+        return;
+      }
+    }
+
     if (!editing && arquivo && !miniatura && !usarMiniaturaAutomatica) {
       if (!hasAutomaticThumbnail(arquivo)) {
         setErro(true);
@@ -340,6 +364,12 @@ export default function Publicacao() {
       if (!response.ok) {
         if (responseBody?.error === "unauthorized")
           throw new Error("Sua sessão expirou. Entre novamente.");
+        if (responseBody?.error === "payout-profile-required") {
+          setRecipientMissing(true);
+          throw new Error("Cadastre os dados de recebimento no painel de controle antes de criar uma publicação.");
+        }
+        if (responseBody?.error === "payout-profile-unavailable")
+          throw new Error("Não foi possível confirmar os dados de recebimento no servidor.");
         if (responseBody?.error === "firebase-configuration")
           throw new Error("As variáveis NEXT_PUBLIC_FIREBASE_API_KEY e NEXT_PUBLIC_FIREBASE_PROJECT_ID precisam estar configuradas no servidor.");
         if (responseBody?.error === "firebase-unavailable")
@@ -515,6 +545,7 @@ export default function Publicacao() {
           </section>
         )}
         <p className={`mt-3 text-right text-xs ${erro ? "text-red" : ""}`} role={erro ? "alert" : "status"} aria-live={erro ? "assertive" : "polite"}>{mensagem}</p>
+        {recipientMissing && <p className="text-right text-xs"><a className="text-gold underline" href="/painel_controle">Abrir painel de controle</a></p>}
         {confirmarMiniatura && arquivo && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <section className="w-full max-w-md space-y-4 border border-black/30 bg-panel p-5 text-ink shadow-xl" role="dialog" aria-modal="true" aria-labelledby="confirmar-miniatura-titulo">
