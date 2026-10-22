@@ -37,7 +37,7 @@ export default function Header({ title, showSearch = true, showPublish = true }:
           }
           <Link className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy text-2xl leading-none hover:bg-navy hover:text-cream" 
           href={user ? `/canal/${user.uid}` : "/login"} aria-label={user ? "Abrir meu canal" : "Entrar ou criar conta"}>
-            {user ? <img src={user.photoURL ?? "/assets/avatar-placeholder.png"} alt={`Avatar de ${user.displayName ?? "usuário"}`} className="h-full w-full rounded-full object-cover" /> : "👤"}
+            {user ? <img src={user.photoURL ?? "/assets/avatar-placeholder.png"} alt={`👤 Avatar de ${user.displayName ?? "usuário"}`} className="h-full w-full rounded-full object-cover" /> : "👤"}
           </Link>
         </nav>
       </div>
