@@ -132,6 +132,8 @@ O comprador escolhe uma publicação ou catálogo e inicia o checkout da Abacate
 
 Publicações e catálogos podem ser gratuitos ou pagos. Aluguéis dão acesso temporário, compras avulsas são permanentes e assinaturas de catálogo renovam mensalmente. Arquivos pagos continuam privados enquanto o usuário não tiver uma concessão válida. O painel de controle reúne compras, vendas, monetizações, assinaturas e saques; ao cancelar uma assinatura, o acesso continua até o fim do período pago.<br />
 
+Para exibir anúncios AdSense antes do visualizador de publicações gratuitas, configure `NEXT_PUBLIC_ADSENSE_PUBLICATION_SLOT` com o ID do bloco de anúncio responsivo criado no AdSense. O anúncio não é renderizado enquanto essa variável não estiver definida. O código do cliente AdSense fica no layout raiz.
+
 #### Recebimento dos criadores e saques de teste
 
 A Abacate Pay usada neste projeto não faz split de marketplace. O pagamento continua sendo recebido pela conta da plataforma; após a confirmação do webhook, o backend registra contabilmente 10% como taxa da plataforma e 90% como parcela do criador, em centavos. Essa divisão inclui compras, aluguéis e cobranças/renovações de assinatura. Não há transferência real nem split enviado ao gateway.<br />
