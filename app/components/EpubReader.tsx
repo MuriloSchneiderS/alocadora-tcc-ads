@@ -89,7 +89,6 @@ export default function EpubReader({ publicationId, title, downloadUrl }: { publ
         <button type="button" onClick={() => void turnPage("next")} disabled={!isReady} aria-label="Próxima página" className="border border-cream/30 px-3 py-1 text-sm text-cream hover:border-gold hover:bg-gold hover:text-navy disabled:opacity-40">Próxima</button>
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 bg-white" />
-      <a href={downloadUrl} target="_blank" rel="noreferrer" className="shrink-0 border-t border-white/10 px-3 py-2 text-center text-xs text-cream/70 hover:text-gold">Baixar EPUB</a>
     </section>
   );
 }
