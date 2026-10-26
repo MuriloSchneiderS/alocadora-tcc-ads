@@ -11,7 +11,7 @@ export function useAcquisitionState(originType: "publicacao" | "catalogo", origi
   const [state, setState] = useState<AcquisitionState>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  useEffect(() => {//inicia o efeito para carregar o estado de aquisição sempre que o usuário, o tipo de origem ou o ID da origem mudarem
     let isCurrent = true;
 
     async function loadState() {

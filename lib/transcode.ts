@@ -293,8 +293,10 @@ async function createEpubThumbnail(file: File): Promise<File> {
   return canvasToWebpFile(canvas, `${file.name.replace(/\.epub$/i, "")}-miniatura.webp`, 0.68);
 }
 
+//Gera uma miniatura automática para arquivos de vídeo, PDF ou EPUB, retornando null se o tipo de arquivo não for suportado
 export async function createAutomaticThumbnail(file: File): Promise<File | null> {
   const extension = file.name.split(".").pop()?.toLowerCase();
+  //Se for imagem ela própria vira a miniatura (redimensionada e convertida para WebP)
   if (file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif"].includes(extension ?? "")) {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
@@ -310,9 +312,15 @@ export async function createAutomaticThumbnail(file: File): Promise<File | null>
     bitmap.close();
     return canvasToWebpFile(canvas, `${file.name.replace(/\.[^.]+$/, "")}-miniatura.webp`, 0.55);
   }
-  if (file.type.startsWith("video/") || ["mp4", "avi", "mkv", "mov", "webm"].includes(extension ?? "")) return createVideoThumbnail(file);
-  if (file.type === "application/pdf" || extension === "pdf") return createPdfThumbnail(file);
-  if (file.type === "application/epub+zip" || extension === "epub") return createEpubThumbnail(file);
+  //Se for vídeo usa o primeiro frame
+  if (file.type.startsWith("video/") || ["mp4", "avi", "mkv", "mov", "webm"].includes(extension ?? "")) 
+    return createVideoThumbnail(file);
+  //Se for PDF usa a primeira página
+  if (file.type === "application/pdf" || extension === "pdf") 
+    return createPdfThumbnail(file);
+  //Se for EPUB usa a primeira seção de leitura
+  if (file.type === "application/epub+zip" || extension === "epub") 
+    return createEpubThumbnail(file);
   return null;
 }
 

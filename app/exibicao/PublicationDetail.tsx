@@ -102,7 +102,7 @@ function Viewer({ publication }: { publication: PublicationView }) {
 }
 
 function PublicationAd() {//componente para exibir anúncios AdSense antes do visualizador de publicações gratuitas
-  const slot = process.env.NEXT_PUBLIC_ADSENSE_PUBLICATION_SLOT;
+  const slot = process.env.NEXT_PUBLIC_ADSENSE_PUBLICATION_SLOT;//obtém o ID do bloco de anúncio do AdSense a partir da variável de ambiente
 
   useEffect(() => {
     if (!slot) return;
