@@ -86,8 +86,8 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
           {duration && <span className="absolute bottom-1 right-1 bg-ink/90 px-1 text-[10px]">{duration}</span>}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="media-card-title line-clamp-2 text-sm font-bold text-white"><a href={href ?? "/exibicao"} className="hover:text-gold">{title}</a></h3>
-          {meta && <p className="mt-1 line-clamp-2 text-xs text-cream/70">{meta}</p>}
+          <h3 className="media-card-title line-clamp-1 text-sm font-bold text-white"><a href={href ?? "/exibicao"} className="hover:text-gold">{title}</a></h3>
+          {meta && <p className="media-card-description mt-0.5 line-clamp-2 text-xs text-cream/70">{meta}</p>}
           {channel && <ChannelInfo {...channel} className="mt-2" />}
           {acquisitions && acquisitions.length > 0 && <div className="mt-2 flex justify-end">
             <AcquisitionOptions options={acquisitions} compact direction="inline" />
@@ -131,10 +131,10 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
       </div>
       <div className={`media-card-info ${isCatalog ? "media-card-info-catalog" : ""}`}>
         <div className="min-w-0 flex-1">
-          <h3 className="media-card-title line-clamp-2 text-xs font-medium text-white">
+          <h3 className="media-card-title line-clamp-1 text-xs font-medium text-white">
             <a href={href ?? "/exibicao"} className="hover:text-gold">{title}</a>
           </h3>
-          {meta && <p className={`${isCatalog ? "line-clamp-2" : "truncate"} mt-1 text-[11px] text-cream/65`}>{meta}</p>}
+          {meta && <p className="media-card-description mt-0.5 line-clamp-2 text-[11px] text-cream/65">{meta}</p>}
         </div>
         {channel && <ChannelInfo {...channel} />}
       </div>

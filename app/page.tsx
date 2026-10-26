@@ -22,21 +22,21 @@ export default function Home() {
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {/* "NOVIDADE" Seção da publicação mais recente, será atualizada conforme a lógica de negócios */}
-        {latestPublication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]" aria-label="Publicação mais recente">
-          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 overflow-hidden bg-panel-muted lg:h-85">
+        {latestPublication && <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]" aria-label="Publicação mais recente">
+          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 min-w-0 overflow-hidden bg-panel-muted lg:h-85">
             <img src={latestPublication.thumbnail} alt={latestPublication.title} className="h-full w-full object-cover" />
           </Link>
-          <div className="flex flex-col justify-between border border-white/10 bg-panel p-3">
+          <div className="flex min-w-0 flex-col justify-between border border-white/10 bg-panel p-3">
             <div>
               <p className="site-accent text-sm font-medium uppercase">Novidade</p>
-              <h1 className="text-3xl text-white">
+              <h1 className="break-words text-3xl text-white">
                 <Link href={latestPublication.href} className="hover:text-gold">{latestPublication.title}</Link>
               </h1>
-              <p className="mt-2 text-xs leading-tight text-cream/80">{latestPublication.description}</p>
+              <p className="mt-2 break-words text-xs leading-tight text-cream/80">{latestPublication.description}</p>
             </div>
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              {latestPublication.acquisitions.length > 0 && <AcquisitionOptions direction="inline" options={latestPublication.acquisitions} />}
-              <ChannelInfo {...latestPublication.channel} />
+            <div className="mt-4 flex min-w-0 flex-col items-stretch gap-4">
+              {latestPublication.acquisitions.length > 0 && <div className="home-featured-acquisitions min-w-0"><AcquisitionOptions direction="inline" options={latestPublication.acquisitions} /></div>}
+              <ChannelInfo {...latestPublication.channel} className="self-end" />
             </div>
           </div>
         </section>}

@@ -140,6 +140,40 @@ textarea:focus-visible {
   .media-card-info-catalog {
     flex-direction: row;
   }
+
+  .media-card-acquisition-overlay {
+    left: 7px;
+    right: 7px;
+  }
+
+  .media-card-acquisition-overlay .acquisition-options {
+    align-items: flex-start;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .media-card-acquisition-overlay .acquisition-option {
+    align-items: stretch;
+    flex: 0 1 calc(33.333% - 2px);
+    min-width: 0;
+  }
+
+  .media-card-acquisition-overlay .acquisition-label {
+    max-width: 100%;
+    font-size: 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .media-card-acquisition-overlay .acquisition-price {
+    font-size: 9px;
+    min-width: 0;
+    padding: 1px 2px;
+    width: 100%;
+  }
 }
 
 .media-card-info {
@@ -192,7 +226,12 @@ textarea:focus-visible {
 }
 
 .media-card-title {
-  min-height: 2.6em;
+  min-height: 1.3em;
+  overflow-wrap: anywhere;
+}
+
+.media-card-description {
+  overflow-wrap: anywhere;
 }
 
 .acquisition-options {
@@ -206,6 +245,22 @@ textarea:focus-visible {
   align-items: flex-end;
   flex-direction: row;
   gap: 9px;
+}
+
+.home-featured-acquisitions .acquisition-options-inline {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.home-featured-acquisitions .acquisition-options-inline .acquisition-option {
+  flex: 0 1 90px;
+  min-width: 30%;
+}
+
+.home-featured-acquisitions .acquisition-price {
+  min-width: 0;
+  width: 100%;
 }
 
 .acquisition-options-inline .acquisition-option {
