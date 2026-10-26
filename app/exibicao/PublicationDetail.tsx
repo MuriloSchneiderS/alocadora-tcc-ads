@@ -86,19 +86,40 @@ function toAcquisitionOptions(items: { tipo?: string; preco?: number; duracao?: 
   });
 }
 
-//componente para exibir a publicação, incluindo visualização, informações do criador, opções de aquisição e recomendações
+//Visualizador para exibir a publicação de acordo com o tipo de arquivo
 function Viewer({ publication }: { publication: PublicationView }) {
   const mimeType = getMimeType(publication.arquivo, publication.tipo);
   if (!publication.url)
-    return <div className="flex h-full min-h-48 items-center justify-center bg-panel p-6 text-center text-sm text-cream/70">Este conteúdo não está disponível para esta conta.</div>;
-  if (publication.tipo === "video") {
+    return <div className="flex h-full min-h-48 items-center justify-center bg-panel p-6 text-center text-sm text-cream/70">
+      Este conteúdo não está disponível para esta conta.
+    </div>;
+
+  if (publication.tipo === "video") {//utiliza o componente VideoPlayer para exibir vídeos, com fallback para abrir ou baixar o arquivo
     const fallback = <a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 inline-block border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a>;
     return <VideoPlayer src={publication.url} type={mimeType} title={publication.titulo} fallback={fallback} />;
   }
-  if (publication.tipo === "audio") return <div className="flex min-h-48 items-center justify-center bg-panel p-6"><audio className="w-full" controls preload="metadata" src={publication.url} /></div>;
-  if (publication.tipo === "imagem") return <img src={publication.url} alt={publication.titulo} className="h-full w-full object-contain" />;
-  if (mimeType === "application/pdf") return <iframe title={publication.titulo} src={publication.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
-  return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center"><p>Este formato não possui visualização direta no navegador.</p><a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a></div>;
+
+  if (publication.tipo === "audio")//exibe a miniatura acima dos controles do áudio
+    return <div className={`flex h-full min-h-48 flex-col overflow-hidden ${publication.miniatura ? "bg-black" : "items-center justify-center bg-panel p-6"}`}>
+      {publication.miniatura && <img
+        src={publication.miniatura}
+        alt={`Miniatura de ${publication.titulo}`}
+        className="min-h-0 w-full flex-1 object-cover opacity-75"
+      />}
+      <audio className={`block w-full shrink-0 ${publication.miniatura ? "" : "max-w-2xl"}`} controls preload="metadata" src={publication.url} />
+    </div>;
+
+  if (publication.tipo === "imagem")//exibe imagens diretamente no navegador
+    return <img src={publication.url} alt={publication.titulo} className="h-full w-full object-contain" />;
+
+  if (mimeType === "application/pdf") 
+    return <iframe title={publication.titulo} src={publication.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
+  return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center">
+    <p>Este formato não possui visualização direta no navegador.</p>
+    <a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">
+      Abrir ou baixar arquivo
+    </a>
+  </div>;
 }
 
 function PublicationAd() {//componente para exibir anúncios AdSense antes do visualizador de publicações gratuitas
@@ -199,7 +220,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
   }
 
   //carrega os dados da publicação, do criador e das recomendações, atualizando o estado do componente
-  useEffect(() => {
+  useEffect(() => {//[publicationId]
     let isCurrent = true;
 
     async function loadPublication() {
@@ -326,9 +347,11 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {!publication && <p className="py-12 text-center text-sm text-cream/70" role="status">{message}</p>}
         {publication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div className="flex flex-col overflow-hidden bg-black">
+          <div className="flex flex-col overflow-hidden ">
             {shouldShowAdvertisement && <PublicationAd />}
-            <div className="aspect-video w-full lg:min-h-[60vh] lg:aspect-auto"><Viewer publication={publication} /></div>
+            <div className="aspect-video w-full lg:min-h-[60vh] lg:aspect-auto">
+              <Viewer publication={publication} />{/*Visualizador para cada tipo de arquivo*/}
+            </div>
           </div>
           <aside className="flex flex-col bg-panel p-3">
             <div className={thumbnailIsPortrait && publication.miniatura ? "flex items-start gap-3" : ""}>
