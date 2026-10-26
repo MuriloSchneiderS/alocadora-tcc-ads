@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Rendition } from "epubjs";
 import { useAuth } from "../providers";
 
-export default function EpubReader({ publicationId, title, downloadUrl }: { publicationId: string; title: string; downloadUrl: string }) {
+export default function EpubReader({ publicationId, title }: { publicationId: string; title: string }) {
   const { user, isLoading: isAuthLoading } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<Rendition | null>(null);
@@ -58,7 +58,7 @@ export default function EpubReader({ publicationId, title, downloadUrl }: { publ
       } catch (error) {
         if (controller.signal.aborted) return;
         console.error("EPUB reader failed to load", error);
-        if (!cancelled) setStatus("Não foi possível abrir este EPUB. Você ainda pode baixar o arquivo.");
+        if (!cancelled) setStatus("Não foi possível abrir este EPUB.");
       }
     }
 

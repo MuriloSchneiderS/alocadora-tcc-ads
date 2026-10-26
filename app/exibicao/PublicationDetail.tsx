@@ -1,10 +1,9 @@
 'use client';
 
 import { collection, doc, getDoc, getDocs, Timestamp } from "firebase/firestore";
-import { getDownloadURL, ref } from "firebase/storage";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { db, storage } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
 import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
 import EpubReader from "../components/EpubReader";
@@ -97,34 +96,56 @@ function Viewer({ publication }: { publication: PublicationView }) {
     </div>;
 
   if (publication.tipo === "video") {//utiliza o componente VideoPlayer para exibir vídeos, com fallback para abrir ou baixar o arquivo
-    const fallback = <a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 inline-block border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">Abrir ou baixar arquivo</a>;
+    const fallback = <p className="text-sm text-cream/70">Não foi possível reproduzir este vídeo.</p>;
     return <VideoPlayer src={publication.url} type={mimeType} title={publication.titulo} fallback={fallback} />;
   }
 
   if (publication.tipo === "audio")//exibe a miniatura acima dos controles do áudio
-    return <div className={`flex h-full min-h-48 flex-col overflow-hidden ${publication.miniatura ? "bg-black" : "items-center justify-center bg-panel p-6"}`}>
+    return <div
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+      className={`flex h-full min-h-48 select-none flex-col overflow-hidden ${publication.miniatura ? "bg-black" : "items-center justify-center bg-panel p-6"}`}
+    >
       {publication.miniatura && <img
         src={publication.miniatura}
         alt={`Miniatura de ${publication.titulo}`}
+        draggable={false}
         className="min-h-0 w-full flex-1 object-cover opacity-75"
       />}
-      <audio className={`block w-full shrink-0 ${publication.miniatura ? "" : "max-w-2xl"}`} controls preload="metadata" src={publication.url} />
+      <audio className={`block w-full shrink-0 ${publication.miniatura ? "" : "max-w-2xl"}`} controls controlsList="nodownload" preload="metadata" src={publication.url} />
     </div>;
 
   if (publication.tipo === "imagem")//exibe imagens diretamente no navegador
-    return <img src={publication.url} alt={publication.titulo} className="h-full w-full object-contain" />;
+    return <img
+      src={publication.url}
+      alt={publication.titulo}
+      draggable={false}
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+      className="h-full w-full select-none object-contain"
+    />;
 
   if (mimeType === "application/pdf")//exibe PDFs diretamente no navegador
-    return <iframe title={publication.titulo} src={publication.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
+    return <iframe
+      title={publication.titulo}
+      src={`${publication.url}#toolbar=0`}
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+      className="h-full min-h-[60vh] w-full border-0 bg-white"
+    />;
 
   if (mimeType === "application/epub+zip")//exibe EPUBs utilizando o componente EpubReader, que renderiza o conteúdo com paginação e navegação
-    return <EpubReader publicationId={publication.id} title={publication.titulo} downloadUrl={publication.url} />;
+    return <EpubReader publicationId={publication.id} title={publication.titulo} />;
     
+  /*Futuros formatos:
+    Modelos 3D,
+    arquivo para impressão 3D,
+    Jogos com WebAssembly,
+    Transmissão ao vivo
+  */
+
   return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center">
     <p>Este formato não possui visualização direta no navegador.</p>
-    <a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">
-      Abrir ou baixar arquivo
-    </a>
   </div>;
 }
 
@@ -228,9 +249,11 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
   //carrega os dados da publicação, do criador e das recomendações, atualizando o estado do componente
   useEffect(() => {//[publicationId]
     let isCurrent = true;
+    let previewUrl = "";
 
     async function loadPublication() {
       try {
+        if (isAuthLoading) return;
         const snapshot = await getDoc(doc(db, "publicacao", publicationId));
         if (!snapshot.exists()) throw new Error("Publicação não encontrada.");
         const data = snapshot.data();
@@ -241,10 +264,21 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
         ]);
         const archivePath = String(data.arquivo ?? "");
         let url = "";
-        try {
-          url = await getDownloadURL(ref(storage, archivePath));
-        } catch {
-          url = "";
+        if (archivePath.toLowerCase().endsWith(".epub")) {
+          url = "epub";
+        } else {
+          try {
+            const response = await fetch(`/api/content/file?publicationId=${encodeURIComponent(publicationId)}`, {
+              headers: user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {},
+              cache: "no-store",
+            });
+            if (response.ok) {
+              previewUrl = URL.createObjectURL(await response.blob());
+              url = previewUrl;
+            }
+          } catch {
+            url = "";
+          }
         }
         const profile = profileSnapshot.data();
         if (isCurrent) {
@@ -320,8 +354,11 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
     }
 
     void loadPublication();
-    return () => { isCurrent = false; };
-  }, [publicationId]);
+    return () => {
+      isCurrent = false;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [isAuthLoading, publicationId, user]);
 
   const isOwner = Boolean(user && publication?.criador === user.uid);
   const thumbnailIsPortrait = Boolean(

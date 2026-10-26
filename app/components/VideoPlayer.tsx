@@ -22,6 +22,7 @@ export default function VideoPlayer({ src, type, title, fallback }: VideoPlayerP
     const videoElement = document.createElement("video-js");
     videoElement.classList.add("video-js", "vjs-big-play-centered", "h-full", "w-full");
     videoElement.setAttribute("aria-label", title);
+    videoElement.setAttribute("controlsList", "nodownload");
     container.appendChild(videoElement);
 
     const player = videojs(videoElement, {
@@ -31,6 +32,8 @@ export default function VideoPlayer({ src, type, title, fallback }: VideoPlayerP
       preload: "metadata",
       sources: [{ src, type }],
     });
+    const video = player.el().querySelector("video");
+    video?.setAttribute("controlsList", "nodownload");
     const showFallback = () => setFallbackSource(sourceKey);
     const hideFallback = () => setFallbackSource((current) => current === sourceKey ? null : current);
     player.on("error", showFallback);
@@ -44,7 +47,12 @@ export default function VideoPlayer({ src, type, title, fallback }: VideoPlayerP
   }, [src, type, title, sourceKey]);
 
   return (
-    <div data-vjs-player className="relative h-full w-full bg-black">
+    <div
+      data-vjs-player
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+      className="relative h-full w-full select-none bg-black"
+    >
       <div ref={playerContainer} className="h-full w-full" />
       <div
         hidden={fallbackSource !== sourceKey}

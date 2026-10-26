@@ -2,37 +2,8 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function hasFreePublicationAccess(publicationId) {
-      return firestore.exists(
-          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
-        )
-        && firestore.get(
-          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
-        ).data.ativo == true
-        && firestore.get(
-          /databases/(default)/documents/publicacao/$(publicationId)/monetizacao/gratuito
-        ).data.preco == 0;
-    }
-
-    function hasCurrentEntitlement(userId, publicationId) {
-      return firestore.exists(
-          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
-        )
-        && firestore.get(
-          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
-        ).data.ativo == true
-        && (firestore.get(
-          /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
-        ).data.get('expira_em', null) == null
-          || firestore.get(
-            /databases/(default)/documents/acesso/$(userId)/publicacoes/$(publicationId)
-          ).data.expira_em > request.time);
-    }
-
     match /publicacoes/arquivos/{userId}/{publicationId}/{fileName} {
-      allow read: if (request.auth != null && request.auth.uid == userId)
-        || hasFreePublicationAccess(publicationId)
-        || (request.auth != null && hasCurrentEntitlement(request.auth.uid, publicationId));
+      allow read: if false;
       allow create: if request.auth != null
         && request.auth.uid == userId
         && resource == null
