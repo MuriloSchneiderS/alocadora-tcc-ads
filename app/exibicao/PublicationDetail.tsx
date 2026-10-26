@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { db, storage } from "../../lib/firebase";
 import AcquisitionOptions from "../components/AcquisitionOptions";
 import ChannelInfo from "../components/ChannelInfo";
+import EpubReader from "../components/EpubReader";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 import Reviews from "../components/Reviews";
@@ -112,8 +113,12 @@ function Viewer({ publication }: { publication: PublicationView }) {
   if (publication.tipo === "imagem")//exibe imagens diretamente no navegador
     return <img src={publication.url} alt={publication.titulo} className="h-full w-full object-contain" />;
 
-  if (mimeType === "application/pdf") 
+  if (mimeType === "application/pdf")//exibe PDFs diretamente no navegador
     return <iframe title={publication.titulo} src={publication.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
+
+  if (mimeType === "application/epub+zip")//exibe EPUBs utilizando o componente EpubReader, que renderiza o conteúdo com paginação e navegação
+    return <EpubReader src={publication.url} title={publication.titulo} />;
+    
   return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center">
     <p>Este formato não possui visualização direta no navegador.</p>
     <a href={publication.url} target="_blank" rel="noreferrer" className="mt-3 border border-cream/30 px-4 py-2 text-sm hover:border-gold hover:bg-gold hover:text-navy">
