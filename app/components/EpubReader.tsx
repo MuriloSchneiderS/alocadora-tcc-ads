@@ -11,6 +11,13 @@ export default function EpubReader({ publicationId, title }: { publicationId: st
   const [status, setStatus] = useState("Carregando livro...");
   const [page, setPage] = useState("");
   const [isReady, setIsReady] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const updateFullscreen = () => setIsFullscreen(document.fullscreenElement === containerRef.current?.parentElement);
+    document.addEventListener("fullscreenchange", updateFullscreen);
+    return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,15 +41,22 @@ export default function EpubReader({ publicationId, title }: { publicationId: st
         const { default: ePub } = await import("epubjs");
         if (cancelled || !containerRef.current) return;
 
+        const mobileLayout = window.matchMedia("(max-width: 767px)");
         const book = ePub(data);
         const rendition = book.renderTo(containerRef.current, {
           width: "100%",
           height: "100%",
-          flow: "paginated",
+          flow: mobileLayout.matches ? "scrolled-doc" : "paginated",
           spread: "none",
+          resizeOnOrientationChange: true,
         });
         renditionRef.current = rendition;
+        const updateFlow = (event: MediaQueryListEvent) => {
+          rendition.flow(event.matches ? "scrolled-doc" : "paginated");
+        };
+        mobileLayout.addEventListener("change", updateFlow);
         destroyBook = () => {
+          mobileLayout.removeEventListener("change", updateFlow);
           rendition.destroy();
           book.destroy();
         };
@@ -81,12 +95,34 @@ export default function EpubReader({ publicationId, title }: { publicationId: st
     }
   }
 
+  async function toggleFullscreen() {
+    const reader = containerRef.current?.parentElement;
+    if (!reader) return;
+    try {
+      if (document.fullscreenElement === reader) await document.exitFullscreen();
+      else await reader.requestFullscreen();
+    } catch (error) {
+      console.error("EPUB fullscreen toggle failed", error);
+    }
+  }
+
   return (
-    <section className="flex h-full min-h-48 flex-col bg-panel" aria-label={`Leitor de ${title}`}>
+    <section className={`flex h-full min-h-48 flex-col bg-panel ${isFullscreen ? "h-[100dvh] w-screen" : ""}`} aria-label={`Leitor de ${title}`}>
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
-        <button type="button" onClick={() => void turnPage("prev")} disabled={!isReady} aria-label="Página anterior" className="border border-cream/30 px-3 py-1 text-sm text-cream hover:border-gold hover:bg-gold hover:text-navy disabled:opacity-40">Anterior</button>
+        <button type="button" onClick={() => void turnPage("prev")} disabled={!isReady} aria-label="Página anterior" className="border border-cream/30 px-3 py-1 text-sm text-cream hover:border-gold hover:bg-gold hover:text-navy disabled:opacity-40">
+          &lt;{/*<*/}
+        </button>
+
         <span className="min-w-0 truncate text-xs text-cream/70" role="status">{page || status}</span>
-        <button type="button" onClick={() => void turnPage("next")} disabled={!isReady} aria-label="Próxima página" className="border border-cream/30 px-3 py-1 text-sm text-cream hover:border-gold hover:bg-gold hover:text-navy disabled:opacity-40">Próxima</button>
+        
+        <div>
+          <button type="button" onClick={() => void turnPage("next")} disabled={!isReady} aria-label="Próxima página" className="border border-cream/30 px-3 py-1 text-sm text-cream hover:border-gold hover:bg-gold hover:text-navy disabled:opacity-40">
+            &gt;{/*>*/}
+          </button>
+          <button type="button" onClick={() => void toggleFullscreen()} aria-label={isFullscreen ? "Sair da tela inteira" : "Abrir em tela inteira"} title={isFullscreen ? "Sair da tela inteira" : "Abrir em tela inteira"} className="shrink-0 border border-cream/30 px-2 py-1 text-xs text-cream hover:border-gold hover:bg-gold hover:text-navy">
+            {isFullscreen ? "🗗" : "🗖"}
+          </button>
+        </div>
       </div>
       <div ref={containerRef} className="min-h-0 flex-1 bg-white" />
     </section>

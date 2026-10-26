@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 function isId(value: string | null): value is string {
   return Boolean(value && /^[0-9a-f-]{36}$/i.test(value));
 }
-
+//rota para acessar o arquivo de uma publicação, com autenticação e verificação de acesso
 export async function GET(request: Request) {
   const authorization = request.headers.get("authorization");
   let user: { uid: string; projectId: string } | null = null;

@@ -393,7 +393,9 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
         {publication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
           <div className="flex flex-col overflow-hidden ">
             {shouldShowAdvertisement && <PublicationAd />}
-            <div className="aspect-video w-full lg:min-h-[60vh] lg:aspect-auto">
+            <div className={publication.arquivo.toLowerCase().endsWith(".epub")
+              ? "h-[75vh] min-h-[480px] w-full lg:h-[75vh]"
+              : "aspect-video w-full lg:min-h-[60vh] lg:aspect-auto"}>
               <Viewer publication={publication} />{/*Visualizador para cada tipo de arquivo*/}
             </div>
           </div>
