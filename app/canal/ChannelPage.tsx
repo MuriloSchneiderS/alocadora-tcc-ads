@@ -145,7 +145,7 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
           {isContentLoading
             ? <p className="py-8 text-center text-sm text-cream/70" role="status">Carregando publicações e catálogos...</p>
             : filteredItems.length > 0
-              ? <section className="grid grid-cols-2 gap-4 py-2 md:grid-cols-3 lg:grid-cols-4" aria-label={`${selectedSection === "publicacoes" ? "Publicações" : selectedSection === "catalogos" ? "Catálogos" : "Publicações e catálogos"} de ${channelProfile.nome}`}>
+              ? <section className="grid gap-4 py-2 md:grid-cols-3 lg:grid-cols-4" aria-label={`${selectedSection === "publicacoes" ? "Publicações" : selectedSection === "catalogos" ? "Catálogos" : "Publicações e catálogos"} de ${channelProfile.nome}`}>
                 {filteredItems.map((item) => <MediaCard
                   key={`${item.type}-${item.id}`}
                   title={item.title}

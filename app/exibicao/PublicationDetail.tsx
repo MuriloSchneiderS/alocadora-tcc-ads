@@ -444,11 +444,11 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
           <div className="min-w-0">
             <h2 className="mb-2 text-sm">Outros de {publication.channelName}</h2>
             {creatorPublications.length > 0
-              ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{relatedCards(creatorPublications)}</div>
+              ? <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">{relatedCards(creatorPublications)}</div>
               : <p className="py-3 text-xs text-cream/70">{relatedMessage || "Este criador ainda não tem outras publicações."}</p>}
             <h2 className="mb-2 mt-5 text-sm">Recomendações</h2>{/*Publicacoes mais recentes,ainda não tem algoritmo*/}
             {recommendations.length > 0
-              ? <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{relatedCards(recommendations)}</div>
+              ? <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">{relatedCards(recommendations)}</div>
               : <p className="py-3 text-xs text-cream/70">{relatedMessage || "Nenhuma recomendação disponível."}</p>}
           </div>
           <Reviews targetType="publication" targetId={publicationId} initialAverage={publication.avaliacao} />

@@ -45,7 +45,7 @@ export default function Home() {
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-cream/80">Mais recentes</h2>
           {isLoading ? <p className="py-8 text-center text-sm text-cream/70" role="status">Carregando publicações e catálogos...</p>
             : error && items.length === 0 ? <p className="py-8 text-center text-sm text-red" role="alert">Não foi possível carregar publicações e catálogos. {error}</p>
-              : feedItems.length > 0 ? <div className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4">
+              : feedItems.length > 0 ? <div className="grid gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4">
                   {feedItems.map((item) => <MediaCard
                     key={`${item.type}-${item.id}`}
                     title={item.title}

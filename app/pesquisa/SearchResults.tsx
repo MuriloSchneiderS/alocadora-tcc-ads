@@ -63,7 +63,7 @@ export default function SearchResults({ initialQuery }: { initialQuery: string }
 
         {isLoading ? <p className="py-12 text-center text-sm text-cream/70" role="status">Pesquisando...</p>
           : error && items.length === 0 ? <p className="py-12 text-center text-sm text-red" role="alert">Não foi possível carregar os resultados. {error}</p>
-            : visibleItems.length > 0 ? <section className="grid grid-cols-2 gap-4 py-2 md:grid-cols-3 lg:grid-cols-4" aria-label="Resultados da pesquisa">
+            : visibleItems.length > 0 ? <section className="grid gap-4 py-2 md:grid-cols-3 lg:grid-cols-4" aria-label="Resultados da pesquisa">
                 {visibleItems.filter(isMediaItem).map((item) => <MediaCard
                   key={`${item.type}-${item.id}`}
                   title={item.title}

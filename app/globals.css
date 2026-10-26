@@ -115,6 +115,7 @@ textarea:focus-visible {
 
 @media (max-width: 639px) {
   .channel-info {
+    max-width: 100% !important;
     gap: 5px;
   }
 
@@ -134,45 +135,17 @@ textarea:focus-visible {
 
   .media-card-info {
     flex-direction: column;
+    align-items: stretch !important;
     gap: 4px;
   }
 
-  .media-card-info-catalog {
-    flex-direction: row;
+  .media-card-info > .channel-info {
+    align-self: flex-end;
   }
 
   .media-card-acquisition-overlay {
     left: 7px;
     right: 7px;
-  }
-
-  .media-card-acquisition-overlay .acquisition-options {
-    align-items: flex-start;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 2px;
-    justify-content: flex-end;
-    width: 100%;
-  }
-
-  .media-card-acquisition-overlay .acquisition-option {
-    align-items: stretch;
-    flex: 0 1 calc(33.333% - 2px);
-    min-width: 0;
-  }
-
-  .media-card-acquisition-overlay .acquisition-label {
-    max-width: 100%;
-    font-size: 7px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .media-card-acquisition-overlay .acquisition-price {
-    font-size: 9px;
-    min-width: 0;
-    padding: 1px 2px;
-    width: 100%;
   }
 }
 

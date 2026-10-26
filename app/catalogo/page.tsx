@@ -90,7 +90,7 @@ export default function Catalogo() {
               ? <p className="py-10 text-center text-sm text-cream/70">Carregando catálogos...</p>
               : catalogs.length === 0
               ? <p className="py-10 text-center text-sm text-cream/70">Você ainda não criou nenhum catálogo.</p>
-              : <section className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4" aria-label="Seus catálogos">
+              : <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-4" aria-label="Seus catálogos">
                 {catalogs.map((catalog) => <MediaCard
                   key={catalog.id}
                   title={catalog.titulo}
