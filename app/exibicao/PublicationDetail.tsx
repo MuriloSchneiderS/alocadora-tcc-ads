@@ -23,6 +23,7 @@ declare global {//declaração global para permitir o uso de anúncios AdSense
 }
 
 type PublicationView = {
+  id: string;
   titulo: string;
   descricao: string;
   miniatura: string;
@@ -117,7 +118,7 @@ function Viewer({ publication }: { publication: PublicationView }) {
     return <iframe title={publication.titulo} src={publication.url} className="h-full min-h-[60vh] w-full border-0 bg-white" />;
 
   if (mimeType === "application/epub+zip")//exibe EPUBs utilizando o componente EpubReader, que renderiza o conteúdo com paginação e navegação
-    return <EpubReader src={publication.url} title={publication.titulo} />;
+    return <EpubReader publicationId={publication.id} title={publication.titulo} downloadUrl={publication.url} />;
     
   return <div className="flex min-h-48 flex-col items-center justify-center bg-panel p-6 text-center">
     <p>Este formato não possui visualização direta no navegador.</p>
@@ -248,6 +249,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
         const profile = profileSnapshot.data();
         if (isCurrent) {
           setPublication({
+            id: publicationId,
             titulo: String(data.titulo ?? "Sem título"),
             descricao: String(data.descricao ?? ""),
             miniatura: String(data.miniatura ?? ""),
