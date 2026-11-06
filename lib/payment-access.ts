@@ -37,6 +37,11 @@ export async function getPublicationAcquisitionState(
   originType?: string,
   originId?: string,
 ): Promise<AcquisitionState> {
+  const publicationSnapshot = await database.collection("publicacao").doc(publicationId).get();
+  const creatorId = publicationSnapshot.data()?.criador;
+  if (!publicationSnapshot.exists || typeof creatorId !== "string" || !creatorId)
+    return null;
+
   const grants = await database.collection("acesso").doc(userId)
     .collection("publicacoes").doc(publicationId).collection("fontes").get();
   const activeGrants = grants.docs.map((item) => item.data()).filter((grant) =>
@@ -44,9 +49,21 @@ export async function getPublicationAcquisitionState(
       && (!originType || grant.origem_tipo === originType)
       && (!originId || grant.origem_id === originId),
   );
-  if (activeGrants.some((grant) => grant.tipo === "compra")) return "purchased";
-  if (activeGrants.some((grant) => grant.tipo === "assinatura")) return "subscribed";
-  if (activeGrants.some((grant) => grant.tipo === "aluguel")) return "rented";
+  const validGrants = await Promise.all(activeGrants.map(async (grant) => {
+    if (typeof grant.transacao !== "string" || !grant.transacao)
+      return false;
+    const transactionSnapshot = await database.collection("transacao").doc(grant.transacao).get();
+    const transaction = transactionSnapshot.data();
+    return transactionSnapshot.exists
+      && transaction?.comprador === userId
+      && transaction?.vendedor === creatorId
+      && Array.isArray(transaction.publicacoes)
+      && transaction.publicacoes.includes(publicationId);
+  }));
+  const verifiedGrants = activeGrants.filter((_, index) => validGrants[index]);
+  if (verifiedGrants.some((grant) => grant.tipo === "compra")) return "purchased";
+  if (verifiedGrants.some((grant) => grant.tipo === "assinatura")) return "subscribed";
+  if (verifiedGrants.some((grant) => grant.tipo === "aluguel")) return "rented";
   return null;
 }
 export async function getCatalogAcquisitionState(

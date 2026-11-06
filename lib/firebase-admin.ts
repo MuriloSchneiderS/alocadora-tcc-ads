@@ -1,6 +1,6 @@
 import "server-only";
 
-import { applicationDefault, cert, getApps, initializeApp } from "firebase-admin/app";
+import { applicationDefault, cert, getApp, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
@@ -28,6 +28,14 @@ export function getAdminFirestore(expectedProjectId?: string) {
   }
 
   return getFirestore();
+}
+
+export async function getAdminAccessToken(expectedProjectId?: string) {
+  getAdminFirestore(expectedProjectId);
+  const credential = getApp().options.credential;
+  if (!credential)
+    throw new Error("firebase-admin-credentials-missing");
+  return (await credential.getAccessToken()).access_token;
 }
 
 export function getAdminStorageBucket(expectedProjectId?: string) {

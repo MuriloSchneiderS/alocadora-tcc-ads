@@ -82,13 +82,15 @@ service cloud.firestore {
         && request.resource.data.descricao is string
         && request.resource.data.miniatura is string
         && request.resource.data.data_criacao is timestamp
-        && request.resource.data.publicacoes is list;
+        && request.resource.data.publicacoes is list
+        && request.resource.data.publicacoes.size() == 0;
       allow update: if signedIn()
         && resource.data.criador == request.auth.uid
         && request.resource.data.criador == resource.data.criador
         && request.resource.data.data_criacao == resource.data.data_criacao
+        && request.resource.data.publicacoes == resource.data.publicacoes
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'titulo', 'descricao', 'miniatura', 'publicacoes'
+          'titulo', 'descricao', 'miniatura'
         ]);
       allow delete: if signedIn() && resource.data.criador == request.auth.uid;
 

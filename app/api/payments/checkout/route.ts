@@ -5,6 +5,7 @@ import { getAdminFirestore } from "@/lib/firebase-admin";
 import { getAdminAuth } from "@/lib/firebase-admin-auth";
 import { ensureAbacateProduct } from "@/lib/payment-products";
 import { getCatalogAcquisitionState, getPublicationAcquisitionState } from "@/lib/payment-access";
+import { isPublicationIdList, publicationsBelongToCreator } from "@/lib/catalog-ownership";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
@@ -113,13 +114,14 @@ export async function POST(request: Request) {
       return Response.json({ error: "monetization-unavailable" }, { status: 409 });
     if (body.tipo === "assinatura" && duration !== 30)
       return Response.json({ error: "subscription-cycle-unavailable" }, { status: 409 });
-    const publicationIds = body.originType === "publicacao"
-      ? [body.originId]
-      : Array.isArray(item.publicacoes)
-        ? item.publicacoes.filter((id: unknown): id is string => typeof id === "string")
-        : [];
+    const publicationIds = body.originType === "publicacao" ? [body.originId] : item.publicacoes;
+    if (!isPublicationIdList(publicationIds))
+      return Response.json({ error: "catalog-publications-invalid" }, { status: 409 });
     if (publicationIds.length === 0)
       return Response.json({ error: "empty-catalog" }, { status: 409 });
+    if (body.originType === "catalogo"
+      && !await publicationsBelongToCreator(database, publicationIds, item.criador))
+      return Response.json({ error: "catalog-publications-invalid" }, { status: 409 });
 
     const acquisitionState = body.originType === "publicacao"
       ? await getPublicationAcquisitionState(database, authentication.user.uid, body.originId)

@@ -114,9 +114,12 @@ O backend HTTP usa Route Handlers do App Router em 'app/api':<br />
 
 - Login e cadastro continuam no SDK cliente Firebase. 'GET /api/auth' valida o ID token enviado como Bearer e retorna 'uid', e-mail e nome do usuário autenticado.<br />
 - 'lib/firebase-auth-server.ts' centraliza validação do ID token e obtenção do 'uid'; cada endpoint protegido deve chamá-lo e usar o 'uid' retornado, nunca um ID enviado no corpo.<br />
-- 'POST /api/content' reutiliza o autenticador e encaminha gravações ao Firestore REST com o token do usuário. As regras Firestore continuam autorizando cada gravação.<br />
+- 'POST /api/content' reutiliza o autenticador e valida que cada catálogo associado pertence ao usuário antes de gravar pelo Firebase Admin no servidor. As regras Firestore impedem gravações diretas do cliente que adicionem publicações a catálogos.<br />
 
-Firebase Admin: as variáveis 'NEXT_PUBLIC_FIREBASE_*' do '.env' configuram o SDK web e não concedem privilégios administrativos. Login e publicação padrão usam o ID token do usuário e as regras do Firestore. Firebase Admin opera somente no servidor para que checkout e webhooks gravem concessões e transações confiáveis; por isso, ela exige também uma credencial de conta de serviço, guardada em variáveis secretas locais/Vercel.<br />
+Firebase Admin: as variáveis 'NEXT_PUBLIC_FIREBASE_*' do '.env' configuram o SDK web e não concedem privilégios administrativos.<br />
+Login e leituras públicas continuam usando o SDK/token do usuário e as regras do Firestore.<br />
+As rotas autenticadas de conteúdo e catálogo validam o proprietário antes de usar uma credencial administrativa apenas no servidor para gravações.<br />
+Checkout e webhook também verificam que cada publicação de um catálogo pertence ao criador antes de criar cobranças ou conceder acesso.<br />
 
 APIs protegidas usam 'authenticateFirebaseRequest', derivam o proprietário de 'user.uid' e não aceitam UID enviado no corpo como prova de identidade. As regras negam escrita do cliente em concessões, transações, assinaturas, cache de produtos e eventos de webhook. Dados de recebimento e saques também ficam inacessíveis diretamente pelo cliente; somente rotas autenticadas com Firebase Admin podem consultá-los ou gravá-los.<br />
 
