@@ -1,5 +1,5 @@
 import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
-import { getAdminFirestore } from "@/lib/firebase-admin";
+import { getAdminAccessToken, getAdminFirestore } from "@/lib/firebase-admin";
 
 const publicationTypes = new Set(["imagem", "video", "audio", "livro"]);
 const monetizationTypes = new Set(["gratuito", "aluguel", "compra"]);
@@ -195,24 +195,29 @@ export async function POST(request: Request) {
     };
   });
 
-  const publicationResult = await writeFirestore(user.idToken, user.projectId, [{
-    update: {
-      name: publicationName,
-      fields: firestoreFields({
-        criador: user.uid,
-        titulo: body.titulo.trim(),
-        descricao: body.descricao.trim(),
-        tipo: body.tipo,
-        tamanho: body.tamanho,
-        duracao: body.duracao,
-        arquivo: body.arquivo,
-        miniatura: body.miniatura,
-        catalogos: body.catalogos.filter((catalogId) => Boolean(catalogId.trim())),
-      }),
-    },
-    updateTransforms: [{ fieldPath: "data_criacao", setToServerValue: "REQUEST_TIME" }],
-    currentDocument: { exists: false },
-  }, ...catalogWrites]);
+  let publicationResult: Awaited<ReturnType<typeof writeFirestore>>;
+  try {
+    publicationResult = await writeFirestore(await getAdminAccessToken(user.projectId), user.projectId, [{
+      update: {
+        name: publicationName,
+        fields: firestoreFields({
+          criador: user.uid,
+          titulo: body.titulo.trim(),
+          descricao: body.descricao.trim(),
+          tipo: body.tipo,
+          tamanho: body.tamanho,
+          duracao: body.duracao,
+          arquivo: body.arquivo,
+          miniatura: body.miniatura,
+          catalogos: body.catalogos.filter((catalogId) => Boolean(catalogId.trim())),
+        }),
+      },
+      updateTransforms: [{ fieldPath: "data_criacao", setToServerValue: "REQUEST_TIME" }],
+      currentDocument: { exists: false },
+    }, ...catalogWrites]);
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
 
   if (!publicationResult.response.ok) {
     console.error("Firestore publication write failed", publicationResult.error?.status ?? publicationResult.response.status);
@@ -234,7 +239,12 @@ export async function POST(request: Request) {
     currentDocument: { exists: false },
   }));
 
-  const monetizationResult = await writeFirestore(user.idToken, user.projectId, monetizationWrites);
+  let monetizationResult: Awaited<ReturnType<typeof writeFirestore>>;
+  try {
+    monetizationResult = await writeFirestore(await getAdminAccessToken(user.projectId), user.projectId, monetizationWrites);
+  } catch {
+    return Response.json({ error: "firebase-unavailable" }, { status: 503 });
+  }
   if (!monetizationResult.response.ok) {
     console.error("Firestore monetization write failed", monetizationResult.error?.status ?? monetizationResult.response.status);
     return Response.json({ error: monetizationResult.response.status === 401 ? "unauthorized" : "content-save-failed" }, {
@@ -366,7 +376,7 @@ export async function PATCH(request: Request) {
         writes.push({ delete: document.name, currentDocument: { exists: true } });
     }
 
-    const result = await writeFirestore(user.idToken, user.projectId, writes);
+    const result = await writeFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
     if (!result.response.ok) {
       console.error("Firestore publication update failed", result.error?.status ?? result.response.status);
       return Response.json({ error: result.response.status === 403 ? "forbidden" : "content-save-failed" }, {
@@ -449,7 +459,7 @@ export async function DELETE(request: Request) {
       currentDocument: { updateTime: publication.updateTime },
     });
 
-    const result = await writeFirestore(user.idToken, user.projectId, writes);
+    const result = await writeFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
     if (!result.response.ok) {
       console.error("Firestore publication deletion failed", result.error?.status ?? result.response.status);
       return Response.json({ error: result.response.status === 403 ? "forbidden" : "content-delete-failed" }, {

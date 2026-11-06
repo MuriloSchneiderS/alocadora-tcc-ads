@@ -2,10 +2,9 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminFirestore } from "@/lib/firebase-admin";
 import { addCalendarMonth, updatePublicationEntitlement } from "@/lib/payment-access";
+import { isPublicationIdList, publicationsBelongToCreator } from "@/lib/catalog-ownership";
 
 export const runtime = "nodejs";
-
-const abacatePayPublicKey = "t9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9";
 
 type EventPayload = {
   id: string;
@@ -38,8 +37,8 @@ function eventDate(event: EventPayload) {
 }
 
 //verifica a assinatura do webhook da AbacatePay, para garantir que o evento recebido é legítimo e não foi alterado por terceiros
-function verifySignature(rawBody: string, signature: string) {
-  const expected = createHmac("sha256", abacatePayPublicKey)
+function verifySignature(rawBody: string, signature: string, signingKey: string) {
+  const expected = createHmac("sha256", signingKey)
     .update(Buffer.from(rawBody, "utf8"))
     .digest("base64");
   const expectedBytes = Buffer.from(expected);
@@ -67,9 +66,11 @@ async function findTransaction(database: FirebaseFirestore.Firestore, externalId
 async function grantTransaction(database: FirebaseFirestore.Firestore, transactionId: string, transactionData: FirebaseFirestore.DocumentData, grantId: string, expiresAt: Date | null, paidAt: Date, subscriptionId?: string) {
   const grossAmount = Number(transactionData.preco ?? 0);
   const platformFee = Math.round(grossAmount * 0.1);
-  const publicationIds = Array.isArray(transactionData.publicacoes)
-    ? transactionData.publicacoes.filter((id): id is string => typeof id === "string")
-    : [];
+  const publicationIds = transactionData.publicacoes;
+  if (typeof transactionData.vendedor !== "string"
+    || !isPublicationIdList(publicationIds)
+    || !await publicationsBelongToCreator(database, publicationIds, transactionData.vendedor))
+    throw new Error("payment-publication-owner-mismatch");
   for (let index = 0; index < publicationIds.length; index += 50) {
     await Promise.all(publicationIds.slice(index, index + 50).map((publicationId) =>
       updatePublicationEntitlement(database, transactionData.comprador, publicationId, grantId, {
@@ -183,6 +184,10 @@ async function processEvent(database: FirebaseFirestore.Firestore, event: EventP
     const transaction = await findTransaction(database, externalId, checkoutId);
     if (!transaction || !subscriptionId) throw new Error("payment-subscription-not-found");
     const data = transaction.data()!;
+    if (typeof data.vendedor !== "string"
+      || !isPublicationIdList(data.publicacoes)
+      || !await publicationsBelongToCreator(database, data.publicacoes, data.vendedor))
+      throw new Error("payment-publication-owner-mismatch");
     const expiresAt = addCalendarMonth(paidAt);
     const subscriptionRef = database.collection("assinatura").doc(subscriptionId);
     await subscriptionRef.set({
@@ -211,6 +216,11 @@ async function processEvent(database: FirebaseFirestore.Firestore, event: EventP
     const subscriptionSnapshot = await subscriptionRef.get();
     if (!subscriptionSnapshot.exists) throw new Error("payment-subscription-not-found");
     const subscription = subscriptionSnapshot.data()!;
+    if (typeof subscription.vendedor !== "string"
+      || !isPublicationIdList(subscription.publicacoes)
+      || !await publicationsBelongToCreator(database, subscription.publicacoes, subscription.vendedor))
+      throw new Error("payment-publication-owner-mismatch");
+    const publicationIds = subscription.publicacoes;
     const previousExpiry = subscription.expira_em instanceof Timestamp ? subscription.expira_em.toDate() : null;
     const anchor = previousExpiry && previousExpiry > paidAt ? previousExpiry : paidAt;
     const expiresAt = addCalendarMonth(anchor);
@@ -221,7 +231,7 @@ async function processEvent(database: FirebaseFirestore.Firestore, event: EventP
       vendedor: subscription.vendedor,
       origem_tipo: "catalogo",
       origem_id: subscription.catalogo,
-      publicacoes: subscription.publicacoes,
+      publicacoes: publicationIds,
       tipo: "assinatura",
       preco: subscription.preco,
       taxa_plataforma: Math.round(Number(subscription.preco ?? 0) * 0.1),
@@ -235,7 +245,7 @@ async function processEvent(database: FirebaseFirestore.Firestore, event: EventP
       criado_em: FieldValue.serverTimestamp(),
     };
     await renewalRef.set(renewalTransaction, { merge: true });
-    await Promise.all((subscription.publicacoes as string[]).map((publicationId) =>
+    await Promise.all(publicationIds.map((publicationId) =>
       updatePublicationEntitlement(database, subscription.usuario, publicationId, `sub_${subscriptionId}_${renewalId.slice(0, 20)}`, {
         active: true,
         expiresAt,
@@ -304,7 +314,8 @@ async function claimEvent(database: FirebaseFirestore.Firestore, event: EventPay
 
 export async function POST(request: Request) {
   const expectedSecret = process.env.ABACATEPAY_WEBHOOK_SECRET;
-  if (!expectedSecret)
+  const signingKey = process.env.ABACATEPAY_WEBHOOK_SIGNING_KEY;
+  if (!expectedSecret || !signingKey)
     return Response.json({ error: "webhook-configuration" }, { status: 503 });
   const suppliedSecret = new URL(request.url).searchParams.get("webhookSecret") ?? "";
   const expectedBytes = Buffer.from(expectedSecret);
@@ -316,7 +327,7 @@ export async function POST(request: Request) {
   if (rawBody.length > 1_000_000)
     return Response.json({ error: "payload-too-large" }, { status: 413 });
   const signature = request.headers.get("X-Webhook-Signature") ?? "";
-  if (!signature || !verifySignature(rawBody, signature))
+  if (!signature || !verifySignature(rawBody, signature, signingKey))
     return Response.json({ error: "invalid-signature" }, { status: 401 });
 
   let payload: unknown;

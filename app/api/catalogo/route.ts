@@ -1,4 +1,6 @@
 import { authenticateFirebaseRequest } from "@/lib/firebase-auth-server";
+import { getAdminAccessToken, getAdminFirestore } from "@/lib/firebase-admin";
+import { publicationsBelongToCreator } from "@/lib/catalog-ownership";
 
 export const runtime = "nodejs";
 
@@ -134,7 +136,7 @@ export async function POST(request: Request) {
   }))];
 
   try {
-    const result = await commitFirestore(user.idToken, user.projectId, writes);
+    const result = await commitFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
     if (!result.ok) return firestoreError(result);
   } catch {
     return Response.json({ error: "firebase-unavailable" }, { status: 503 });
@@ -199,7 +201,7 @@ export async function PATCH(request: Request) {
           writes.push({ delete: document.name, currentDocument: { exists: true } });
       }
 
-      const result = await commitFirestore(user.idToken, user.projectId, writes);
+      const result = await commitFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
       if (!result.ok) return firestoreError(result);
       return Response.json({ catalogId: body.catalogId, action: "edit" });
     } catch {
@@ -236,18 +238,29 @@ export async function PATCH(request: Request) {
       const requestedIds = body.publicationIds as string[];
       if (requestedIds.length !== publicationIds.length || requestedIds.some((id) => !publicationIds.includes(id)))
         return Response.json({ error: "invalid-order" }, { status: 400 });
+      if (requestedIds.length > 0
+        && !await publicationsBelongToCreator(getAdminFirestore(user.projectId), requestedIds, user.uid))
+        return Response.json({ error: "forbidden" }, { status: 403 });
       updatedPublicationIds = requestedIds;
     } else {
       const publicationResult = await readDocument(user.idToken, user.projectId, "publicacao", body.publicationId as string);
-      if (publicationResult.response.status === 404)
-        return Response.json({ error: "content-not-found" }, { status: 404 });
-      if (!publicationResult.response.ok) return firestoreError(publicationResult.response);
-      publicationFields = publicationResult.document?.fields ?? {};
-      if (publicationFields.criador?.stringValue !== user.uid)
-        return Response.json({ error: "forbidden" }, { status: 403 });
-      publicationUpdateTime = publicationResult.document?.updateTime;
-      if (!publicationUpdateTime)
-        return Response.json({ error: "publication-save-failed" }, { status: 500 });
+      if (publicationResult.response.status === 404 && action === "remove") {
+        publicationFields = {};
+      } else {
+        if (publicationResult.response.status === 404)
+          return Response.json({ error: "content-not-found" }, { status: 404 });
+        if (!publicationResult.response.ok) return firestoreError(publicationResult.response);
+        publicationFields = publicationResult.document?.fields ?? {};
+        if (publicationFields.criador?.stringValue !== user.uid && action === "add")
+          return Response.json({ error: "forbidden" }, { status: 403 });
+        if (publicationFields.criador?.stringValue === user.uid) {
+          publicationUpdateTime = publicationResult.document?.updateTime;
+          if (!publicationUpdateTime)
+            return Response.json({ error: "publication-save-failed" }, { status: 500 });
+        } else {
+          publicationFields = {};
+        }
+      }
 
       const isAlreadyIncluded = publicationIds.includes(body.publicationId as string);
       if (action === "add" && isAlreadyIncluded)
@@ -292,7 +305,7 @@ export async function PATCH(request: Request) {
       updateMask: { fieldPaths: ["publicacoes", "miniatura"] },
       currentDocument: { updateTime },
     }];
-    if (!isReorderRequest) {
+    if (!isReorderRequest && publicationUpdateTime) {
       const publicationCatalogIds = publicationFields.catalogos?.arrayValue?.values?.map((item) => item.stringValue ?? "") ?? [];
       const updatedCatalogIds = action === "add"
         ? [...new Set([...publicationCatalogIds, body.catalogId])]
@@ -306,7 +319,7 @@ export async function PATCH(request: Request) {
         currentDocument: { updateTime: publicationUpdateTime },
       });
     }
-    const result = await commitFirestore(user.idToken, user.projectId, writes);
+    const result = await commitFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
     if (!result.ok) return firestoreError(result);
   } catch {
     return Response.json({ error: "firebase-unavailable" }, { status: 503 });
@@ -377,7 +390,7 @@ export async function DELETE(request: Request) {
       delete: `projects/${user.projectId}/databases/(default)/documents/catalogo/${body.catalogId}`,
       currentDocument: { updateTime: catalogDocument.updateTime },
     });
-    const result = await commitFirestore(user.idToken, user.projectId, writes);
+    const result = await commitFirestore(await getAdminAccessToken(user.projectId), user.projectId, writes);
     if (!result.ok) return firestoreError(result);
   } catch {
     return Response.json({ error: "firebase-unavailable" }, { status: 503 });
