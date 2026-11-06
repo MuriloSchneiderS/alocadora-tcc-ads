@@ -22,11 +22,11 @@ export default function Home() {
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {/* "NOVIDADE" Seção da publicação mais recente, será atualizada conforme a lógica de negócios */}
-        {latestPublication && <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]" aria-label="Publicação mais recente">
-          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 min-w-0 overflow-hidden bg-panel lg:h-85">
+        {latestPublication && <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,3fr)]" aria-label="Publicação mais recente">
+          <Link href={latestPublication.href} aria-label={`Abrir publicação: ${latestPublication.title}`} className="block min-h-72 min-w-0 overflow-hidden bg-panel lg:h-98">
             <img src={latestPublication.thumbnail} alt={latestPublication.title} className="h-full w-full object-contain" />
           </Link>
-          <div className="flex min-w-0 flex-col border border-white/10 bg-panel p-3 lg:h-85">
+          <div className="flex min-w-0 flex-col border border-white/10 bg-panel p-3 lg:h-98">
             <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
               <p className="site-accent text-sm font-medium uppercase">Novidade</p>
               <h1 className="wrap-break-word text-3xl text-white">
