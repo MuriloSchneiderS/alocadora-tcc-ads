@@ -79,9 +79,9 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
   if (variant === "row") {
     return (
       <article data-publication-id={reorderId} className={`flex gap-3 border-b border-white/10 py-3 first:pt-0 ${isReordering ? "bg-white/5 opacity-60" : ""}`}>
-        <div className="relative h-20 w-32 shrink-0 overflow-hidden bg-panel-muted">
+        <div className="relative h-20 w-32 shrink-0 overflow-hidden bg-panel">
           <a href={href ?? "/exibicao"} aria-label={`Abrir publicação: ${title}`} className="group block h-full w-full">
-            <img src={image} alt="" className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+            <img src={image} alt="" className="h-full w-full object-contain transition duration-200 group-hover:scale-105" />
           </a>
           {duration && <span className="absolute bottom-1 right-1 bg-ink/90 px-1 text-[10px]">{duration}</span>}
         </div>
@@ -118,9 +118,9 @@ export default function MediaCard({ title, image, meta, duration, href, monetiza
 
   return (
     <article className="min-w-0">
-      <div className={`media-card-thumbnail group relative block aspect-video overflow-hidden bg-panel-muted ${isCatalog ? "border-2 border-orange" : ""}`}>
+      <div className={`media-card-thumbnail group relative block aspect-video overflow-hidden bg-panel ${isCatalog ? "border-2 border-orange" : ""}`}>
         <a href={href ?? "/exibicao"} className="absolute inset-0" aria-label={`Abrir: ${title}`}>
-          <img src={image} alt="" className="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+          <img src={image} alt="" className="h-full w-full object-contain transition duration-200 group-hover:scale-105" />
         </a>
         {acquisitions && acquisitions.length > 0
           ? <div className="media-card-acquisition-overlay"><AcquisitionOptions options={acquisitions} compact /></div>

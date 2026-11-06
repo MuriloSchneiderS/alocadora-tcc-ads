@@ -399,8 +399,8 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
               <Viewer publication={publication} />{/*Visualizador para cada tipo de arquivo*/}
             </div>
           </div>
-          <aside className="flex flex-col bg-panel p-3">
-            <div className={thumbnailIsPortrait && publication.miniatura ? "flex items-start gap-3" : ""}>
+          <aside className="flex flex-col bg-panel p-3 lg:h-[75vh]">
+            <div className={`lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${thumbnailIsPortrait && publication.miniatura ? "flex items-start gap-3" : ""}`}>
               {publication.miniatura && <img
                 src={publication.miniatura}
                 alt={`Miniatura de ${publication.titulo}`}
@@ -417,7 +417,7 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
                 <p className="mt-2 text-sm leading-tight text-cream/80">{publication.descricao}</p>
               </div>
             </div>
-            <div className="mt-auto pt-5">
+            <div className="mt-auto shrink-0 pt-5">
               {publication.monetizacoes.length > 0 && <div className="mb-4"><AcquisitionOptions
                 direction="inline"
                 options={publication.monetizacoes}
