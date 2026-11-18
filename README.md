@@ -18,12 +18,17 @@ Protótipo de estrutura:<br />
 storageReservations: status, expiresAt, __name__ <br />
 publicacao: criador, data_criacao, __name__ <br />
 catalogo: criador, data_criacao, __name__<br />
+canal_seguindo: canal, data_criacao, __name__; seguidor, data_criacao, __name__<br />
 ### Firestore:
 usuario/{usuarioId} (documento público do canal; o ID é o UID do Firebase Auth)<br />
 ____- nome (string)<br />
 ____- titulo (string)<br />
 ____- descricao (string)<br />
 ____- avatar (url storage)<br />
+canal_seguindo/{relacionamentoId} (relação entre dois canais; escrita somente pela API autenticada)<br />
+____- seguidor (usuarioId que iniciou o seguimento)<br />
+____- canal (usuarioId seguido)<br />
+____- data_criacao (timestamp)<br />
 catalogo/{catalogoId}<br />
 ____- titulo (string)<br />
 ____- descricao (string)<br />
@@ -128,6 +133,7 @@ APIs protegidas usam 'authenticateFirebaseRequest', derivam o proprietário de '
 - 'GET/PUT /api/payments/recipient' consulta e salva os dados privados de recebimento do usuário autenticado.<br />
 - 'GET/POST /api/payments/withdrawals' calcula o saldo disponível e registra um saque simulado com comprovante no painel.<br />
 - 'GET /api/payments/dashboard' devolve dados do próprio usuário; 'POST /api/payments/subscriptions/cancel' interrompe a recorrência sem antecipar o fim do acesso já pago.<br />
+- 'GET/POST/DELETE /api/channels/{channelId}/follow' consulta contagens/estado, segue e deixa de seguir um canal; a listagem paginada exige que o canal solicitado pertença ao usuário autenticado.<br />
 
 ### Pagamentos
 
@@ -210,6 +216,36 @@ As avaliações de publicações e catálogos são armazenadas na coleção glob
     Com zero avaliações, a média exibida é zero e nenhum valor médio precisa ser persistido.
 
 Os documentos de publicação mantêm o formato de ID já usado antes da unificação da API, para que as avaliações existentes continuem associadas ao mesmo usuário e publicação. Para catálogos, o ID também inclui o tipo do alvo, evitando colisões com avaliações de publicação. Os campos 'publicacao' e 'catalogo' são mutuamente exclusivos em cada documento de avaliação.
+
+### Seguir canais
+
+O seguimento usa uma única coleção global 'canal_seguindo', sem acrescentar campos ou contadores aos documentos públicos 'usuario'. Cada documento representa uma relação direcionada entre o canal que segue e o canal seguido. O ID é determinístico a partir do par de UIDs, evitando relações duplicadas. Os campos 'seguidor' e 'canal' permitem consultar as duas direções; os índices compostos com 'data_criacao' suportam paginação.
+
+A coleção é escrita exclusivamente pela API com Firebase Admin; as regras do Firestore negam leitura e escrita diretas do cliente. A API autentica o ID token e deriva o UID do usuário autenticado. O próprio canal não pode ser seguido. As contagens são consultas agregadas, não ficam persistidas nos perfis e, portanto, não precisam de sincronização ou manutenção de campos contadores. As contagens podem ser consultadas publicamente, mas a API só entrega as listas ao proprietário do canal solicitado.
+
+#### Fluxo de seguir e consultar canais
+
+    1: Ao abrir um canal, a interface consulta 'GET /api/channels/{channelId}/follow'.
+    A resposta contém as contagens de seguidores e de canais seguidos e, quando há sessão,
+    informa se o usuário atual já segue aquele canal.
+
+    2: Uma pessoa autenticada seleciona **Seguir** ou **Seguindo**.
+    A interface envia 'POST' para seguir ou 'DELETE' para deixar de seguir,
+    sempre com o ID token Firebase no cabeçalho Bearer.
+    O servidor confirma que o canal existe e grava/remove a relação determinística.
+
+    3: Os contadores aparecem na página do canal.
+    Qualquer visitante pode ver os totais, mas somente o proprietário do canal
+    pode clicar em **Seguidores** ou **Seguindo** para abrir as listas.
+
+    4: As listas usam a página de pesquisa com os parâmetros
+    'channelId' e 'list=followers' ou 'list=following'.
+    'GET /api/channels/{channelId}/follow?list=...' valida que o UID autenticado
+    corresponde ao canal solicitado, consulta as relações e devolve cartões de canais.
+
+    5: Cada resposta de lista contém até 12 canais e um cursor opaco.
+    O botão **Carregar mais** solicita a próxima página com esse cursor;
+    relações sem um perfil 'usuario' correspondente não são exibidas.
 
 ### Pesquisa
 

@@ -19,6 +19,24 @@
       ]
     },
     {
+      "collectionGroup": "canal_seguindo",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "canal", "order": "ASCENDING" },
+        { "fieldPath": "data_criacao", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "canal_seguindo",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "seguidor", "order": "ASCENDING" },
+        { "fieldPath": "data_criacao", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "storageReservations",
       "queryScope": "COLLECTION",
       "fields": [

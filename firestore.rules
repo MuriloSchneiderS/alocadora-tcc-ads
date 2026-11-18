@@ -68,6 +68,10 @@ service cloud.firestore {
         allow delete: if false;
     }
 
+    match /canal_seguindo/{followId} {
+      allow read, write: if false;
+    }
+
     match /catalogo/{catalogId} {
       allow read: if true;
       allow create: if signedIn()

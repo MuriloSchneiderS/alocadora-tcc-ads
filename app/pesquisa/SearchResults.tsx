@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { SearchChannelItem, SearchMediaItem, SearchItem } from "../../lib/content-search";
 import usePagedContent from "../hooks/usePagedContent";
+import usePagedFollowChannels from "../hooks/usePagedFollowChannels";
 import Header from "../components/Header";
 import MediaCard from "../components/MediaCard";
 
@@ -31,23 +32,47 @@ function matchesFilter(item: SearchItem, filter: SearchFilter) {
   return item.type === "channel";
 }
 
-export default function SearchResults({ initialQuery }: { initialQuery: string }) {
+type ChannelList = {
+  channelId: string;
+  list: "followers" | "following";
+};
+
+type SearchResultsProps = {
+  initialQuery: string;
+  channelList?: ChannelList;
+};
+
+export default function SearchResults({ initialQuery, channelList }: SearchResultsProps) {
   const [filter, setFilter] = useState<SearchFilter>("tudo");
   //chama o hook usePagedContent para buscar os resultados da pesquisa com base na query inicial e no filtro selecionado
-  const { items, isLoading, isLoadingMore, error, hasMore, loadMore } = usePagedContent({
+  const searchResults = usePagedContent({
     query: initialQuery,
-    enabled: Boolean(initialQuery.trim()),
+    enabled: !channelList && Boolean(initialQuery.trim()),
   });
+  const followResults = usePagedFollowChannels({
+    channelId: channelList?.channelId ?? "",
+    list: channelList?.list ?? "followers",
+    enabled: Boolean(channelList),
+  });
+  const items = channelList ? followResults.items : searchResults.items;
+  const isLoading = channelList ? followResults.isLoading : searchResults.isLoading;
+  const isLoadingMore = channelList ? followResults.isLoadingMore : searchResults.isLoadingMore;
+  const error = channelList ? followResults.error : searchResults.error;
+  const hasMore = channelList ? followResults.hasMore : searchResults.hasMore;
+  const loadMore = channelList ? followResults.loadMore : searchResults.loadMore;
   const visibleItems = items.filter((item) => matchesFilter(item, filter));
+  const channelListTitle = channelList?.list === "followers" ? "Seguidores" : "Seguindo";
 
   return (
     <div className="min-h-screen bg-ink text-cream">
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-5 sm:px-5">
         <h1 className="mb-4 text-2xl font-bold text-white">
-          {initialQuery ? `Resultados para "${initialQuery}"` : "Pesquisar"}
+          {channelList
+            ? channelListTitle
+            : initialQuery ? `Resultados para "${initialQuery}"` : "Pesquisar"}
         </h1>
-        <nav className="mb-5 flex overflow-x-auto border-b border-white/15" aria-label="Filtros da pesquisa">
+        {!channelList && <nav className="mb-5 flex overflow-x-auto border-b border-white/15" aria-label="Filtros da pesquisa">
           {filters.map(({ id, label }) => (
             <button
               key={id}
@@ -59,9 +84,11 @@ export default function SearchResults({ initialQuery }: { initialQuery: string }
               {label}
             </button>
           ))}
-        </nav>
+        </nav>}
 
-        {isLoading ? <p className="py-12 text-center text-sm text-cream/70" role="status">Pesquisando...</p>
+        {isLoading ? <p className="py-12 text-center text-sm text-cream/70" role="status">
+          {channelList ? "Carregando canais..." : "Pesquisando..."}
+        </p>
           : error && items.length === 0 ? <p className="py-12 text-center text-sm text-red" role="alert">Não foi possível carregar os resultados. {error}</p>
             : visibleItems.length > 0 ? <section className="grid gap-4 py-2 md:grid-cols-3 lg:grid-cols-4" aria-label="Resultados da pesquisa">
                 {visibleItems.filter(isMediaItem).map((item) => <MediaCard
@@ -88,7 +115,9 @@ export default function SearchResults({ initialQuery }: { initialQuery: string }
                 </article>)}
               </section>
               : <p className="py-12 text-center text-sm text-cream/70">
-                {initialQuery ? `Nenhum resultado encontrado para o filtro "${filters.find(({ id }) => id === filter)?.label}".` : "Digite um termo na barra de pesquisa para encontrar publicações, catálogos e canais."}
+                {channelList
+                  ? channelList.list === "followers" ? "Este canal ainda não tem seguidores." : "Este canal ainda não segue outros canais."
+                  : initialQuery ? `Nenhum resultado encontrado para o filtro "${filters.find(({ id }) => id === filter)?.label}".` : "Digite um termo na barra de pesquisa para encontrar publicações, catálogos e canais."}
               </p>}
 
         {error && items.length > 0 && <p className="mt-4 text-center text-sm text-red" role="alert">{error}</p>}

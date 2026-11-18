@@ -22,9 +22,35 @@ type ChannelResult = {
   error?: string;
 };
 
+type ChannelFollowSummary = {
+  followers: number;
+  following: number;
+  isFollowing: boolean;
+};
+
+type ChannelFollowResult = {
+  id: string;
+  summary: ChannelFollowSummary | null;
+  error?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function followErrorMessage(error: string) {
+  if (error === "unauthorized") return "Entre na sua conta para seguir este canal.";
+  if (error === "cannot-follow-self") return "Você não pode seguir o próprio canal.";
+  if (error === "channel-not-found") return "Este canal não está mais disponível.";
+  return "Não foi possível atualizar o canal seguido. Tente novamente.";
+}
+
 export default function ChannelPage({ channelId }: ChannelPageProps) {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [channelResult, setChannelResult] = useState<ChannelResult | null>(null);
+  const [followResult, setFollowResult] = useState<ChannelFollowResult | null>(null);
+  const [isUpdatingFollow, setIsUpdatingFollow] = useState(false);
+  const [followActionError, setFollowActionError] = useState("");
   const [selectedSection, setSelectedSection] = useState<"tudo" | "publicacoes" | "catalogos">("tudo");
   const [searchInput, setSearchInput] = useState("");
   const [channelSearch, setChannelSearch] = useState("");
@@ -75,10 +101,100 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
     return () => { isCurrent = false; };
   }, [channelId, isAuthLoading, isOwnChannel, user]);
 
+  useEffect(() => {
+    if (isAuthLoading) return;
+
+    let isCurrent = true;
+    const controller = new AbortController();
+
+    async function loadFollowSummary() {
+      try {
+        const headers: Record<string, string> = {};
+        if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+        const response = await fetch(`/api/channels/${encodeURIComponent(channelId)}/follow`, {
+          headers,
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          const error = isRecord(result) && typeof result.error === "string" ? result.error : "follow-data-unavailable";
+          throw new Error(error);
+        }
+        if (!isRecord(result) || typeof result.followers !== "number"
+          || typeof result.following !== "number" || typeof result.isFollowing !== "boolean")
+          throw new Error("follow-data-invalid");
+        if (isCurrent) {
+          setFollowResult({
+            id: channelId,
+            summary: {
+              followers: result.followers,
+              following: result.following,
+              isFollowing: result.isFollowing,
+            },
+          });
+        }
+      } catch (caught) {
+        if (isCurrent && !controller.signal.aborted) {
+          setFollowResult({
+            id: channelId,
+            summary: null,
+            error: caught instanceof Error ? caught.message : "follow-data-unavailable",
+          });
+        }
+      }
+    }
+
+    void loadFollowSummary();
+    return () => {
+      isCurrent = false;
+      controller.abort();
+    };
+  }, [channelId, isAuthLoading, user]);
+
+  async function handleFollowToggle() {
+    if (!user || !channelFollowSummary || isUpdatingFollow) return;
+
+    setIsUpdatingFollow(true);
+    setFollowActionError("");
+    const wasFollowing = channelFollowSummary.isFollowing;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/channels/${encodeURIComponent(channelId)}/follow`, {
+        method: wasFollowing ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const result: unknown = await response.json();
+      const isFollowing = isRecord(result) ? result.isFollowing : undefined;
+      if (!response.ok || typeof isFollowing !== "boolean")
+        throw new Error(isRecord(result) && typeof result.error === "string" ? result.error : "follow-update-failed");
+
+      setFollowResult((current) => current?.id === channelId && current.summary
+        ? {
+          ...current,
+          summary: {
+            ...current.summary,
+            isFollowing,
+            followers: Math.max(
+              0,
+              current.summary.followers + Number(isFollowing) - Number(current.summary.isFollowing),
+            ),
+          },
+        }
+        : current);
+    } catch (caught) {
+      setFollowActionError(followErrorMessage(caught instanceof Error ? caught.message : ""));
+    } finally {
+      setIsUpdatingFollow(false);
+    }
+  }
+
   const tabClass = (section: "tudo" | "publicacoes" | "catalogos") =>
     `flex shrink-0 items-stretch border-r border-white/15 text-sm sm:text-lg ${selectedSection === section ? "bg-cream text-ink" : "text-cream hover:bg-panel"}`;
   const currentChannelResult = channelResult?.id === channelId ? channelResult : null;
   const channelProfile = currentChannelResult?.profile ?? null;
+  const currentFollowResult = followResult?.id === channelId ? followResult : null;
+  const channelFollowSummary = currentFollowResult?.summary ?? null;
   const isLoading = isAuthLoading || currentChannelResult === null;
   const error = currentChannelResult?.error ?? "";
   const channelItems = items.filter((item): item is SearchMediaItem => item.type !== "channel");
@@ -116,11 +232,32 @@ export default function ChannelPage({ channelId }: ChannelPageProps) {
                 <p className="text-2xl text-cream/90">{channelProfile.titulo}</p>
                 {isOwnChannel
                   ? <Link href="/painel_controle" className="mt-2 block w-full border border-gold/30 bg-panel-muted px-5 py-2 text-sm font-bold text-white hover:bg-gold hover:text-navy">PAINEL DE CONTROLE</Link>
-                  : <button type="button" className="mt-2 w-full border border-gold/30 bg-panel-muted px-8 py-1 text-xl text-white hover:bg-gold hover:text-navy">Seguir</button>}
+                  : user
+                    ? <button
+                      type="button"
+                      onClick={() => void handleFollowToggle()}
+                      disabled={!channelFollowSummary || isUpdatingFollow}
+                      className="mt-2 w-full border border-gold/30 bg-panel-muted px-8 py-1 text-xl text-white hover:bg-gold hover:text-navy disabled:cursor-wait disabled:opacity-60"
+                    >{isUpdatingFollow ? "Aguarde..." : channelFollowSummary?.isFollowing ? "Seguindo" : "Seguir"}</button>
+                    : <Link href="/login" className="mt-2 block w-full border border-gold/30 bg-panel-muted px-8 py-1 text-center text-xl text-white hover:bg-gold hover:text-navy">Entrar para seguir</Link>}
+                <div className="mt-2 flex justify-end gap-4 text-sm">
+                  {isOwnChannel
+                    ? <Link href={`/pesquisa?channelId=${encodeURIComponent(channelId)}&list=followers`} className="hover:text-gold">
+                      {channelFollowSummary?.followers ?? "—"} seguidores
+                    </Link>
+                    : <span>{channelFollowSummary?.followers ?? "—"} seguidores</span>}
+                  {isOwnChannel
+                    ? <Link href={`/pesquisa?channelId=${encodeURIComponent(channelId)}&list=following`} className="hover:text-gold">
+                      {channelFollowSummary?.following ?? "—"} seguindo
+                    </Link>
+                    : <span>{channelFollowSummary?.following ?? "—"} seguindo</span>}
+                </div>
               </div>
               <img src={channelProfile.avatar} alt={`Avatar de ${channelProfile.nome}`} className="h-24 w-24 rounded-full object-cover" />
             </div>
           </div>
+          {currentFollowResult?.error && <p role="alert" className="mt-3 text-right text-xs text-red">Não foi possível carregar os dados de seguidores.</p>}
+          {followActionError && <p role="alert" className="mt-3 text-right text-xs text-red">{followActionError}</p>}
         </section>
 
         <nav className="mt-1 flex min-w-0 items-center border-b border-white/15" aria-label="Seções do canal">
