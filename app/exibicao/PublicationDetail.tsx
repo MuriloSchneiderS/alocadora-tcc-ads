@@ -395,12 +395,12 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
             {shouldShowAdvertisement && <PublicationAd />}
             <div className={publication.arquivo.toLowerCase().endsWith(".epub")
               ? "h-[75vh] min-h-[480px] w-full lg:h-[75vh]"
-              : "aspect-video w-full lg:min-h-[60vh] lg:aspect-auto"}>
+              : "aspect-video w-full lg:h-[60vh] lg:aspect-auto"}>
               <Viewer publication={publication} />{/*Visualizador para cada tipo de arquivo*/}
             </div>
           </div>
-          <aside className="flex flex-col bg-panel p-3 lg:h-[75vh]">
-            <div className={`lg:min-h-0 lg:flex-1 lg:overflow-y-auto ${thumbnailIsPortrait && publication.miniatura ? "flex items-start gap-3" : ""}`}>
+          <aside className={`flex flex-col bg-panel p-3 ${publication.arquivo.toLowerCase().endsWith(".epub") ? "lg:h-[75vh]" : "lg:h-[60vh]"}`}>
+            <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${thumbnailIsPortrait && publication.miniatura ? "flex-row items-start gap-3" : ""}`}>
               {publication.miniatura && <img
                 src={publication.miniatura}
                 alt={`Miniatura de ${publication.titulo}`}
@@ -410,11 +410,11 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
                 })}
                 className={thumbnailIsPortrait
                   ? "max-h-90 w-1/3 shrink-0 object-contain"
-                  : "mb-4 block max-h-90 w-full object-contain"}
+                  : "mb-4 block max-h-90 w-full shrink-0 object-contain lg:max-h-[50%]"}
               />}
-              <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-semibold text-white">{publication.titulo}</h1>
-                <p className="mt-2 text-sm leading-tight text-cream/80">{publication.descricao}</p>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <h1 className="shrink-0 text-xl font-semibold text-white">{publication.titulo}</h1>
+                <p className="mt-2 min-h-[2.5rem] flex-1 overflow-y-auto text-sm leading-tight text-cream/80">{publication.descricao}</p>
               </div>
             </div>
             <div className="mt-auto shrink-0 pt-5">
