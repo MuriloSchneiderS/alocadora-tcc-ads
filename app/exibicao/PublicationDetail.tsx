@@ -390,16 +390,16 @@ export default function PublicationDetail({ publicationId }: { publicationId: st
       <Header />
       <main className="mx-auto max-w-[1800px] px-3 py-3 sm:px-5">
         {!publication && <p className="py-12 text-center text-sm text-cream/70" role="status">{message}</p>}
-        {publication && <section className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-          <div className="flex flex-col overflow-hidden ">
+        {publication && <section className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+          <div className="flex min-w-0 flex-col overflow-hidden">
             {shouldShowAdvertisement && <PublicationAd />}
             <div className={publication.arquivo.toLowerCase().endsWith(".epub")
               ? "h-[75vh] min-h-[480px] w-full lg:h-[75vh]"
-              : "aspect-video w-full lg:h-[60vh] lg:aspect-auto"}>
+              : "aspect-video w-full lg:min-h-[60vh] lg:aspect-auto"}>
               <Viewer publication={publication} />{/*Visualizador para cada tipo de arquivo*/}
             </div>
           </div>
-          <aside className={`flex flex-col bg-panel p-3 ${publication.arquivo.toLowerCase().endsWith(".epub") ? "lg:h-[75vh]" : "lg:h-[60vh]"}`}>
+          <aside className="flex min-w-0 flex-col bg-panel p-3">
             <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${thumbnailIsPortrait && publication.miniatura ? "flex-row items-start gap-3" : ""}`}>
               {publication.miniatura && <img
                 src={publication.miniatura}
